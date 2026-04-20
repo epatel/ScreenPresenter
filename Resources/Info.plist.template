@@ -21,7 +21,7 @@
     <key>CFBundleShortVersionString</key>
     <string>__VERSION__</string>
     <key>CFBundleVersion</key>
-    <string>__VERSION__</string>
+    <string>__BUILD__</string>
     <key>LSMinimumSystemVersion</key>
     <string>13.0</string>
     <key>LSUIElement</key>
@@ -42,7 +42,6 @@
             <key>LSItemContentTypes</key>
             <array>
                 <string>net.daringfireball.markdown</string>
-                <string>public.plain-text</string>
             </array>
             <key>CFBundleTypeExtensions</key>
             <array>

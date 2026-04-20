@@ -426,7 +426,7 @@ struct ConfigPanelView: View {
     @ObservedObject var state: PresenterState
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("Settings").font(.system(size: 14, weight: .semibold))
                 Spacer()
@@ -436,12 +436,34 @@ struct ConfigPanelView: View {
             }
 
             row("Font") {
-                Picker("", selection: $settings.fontName) {
+                Menu {
                     ForEach(PresenterSettings.fontOptions, id: \.self) { name in
-                        Text(name).tag(name)
+                        Button(name) { settings.fontName = name }
                     }
+                } label: {
+                    HStack {
+                        Text(settings.fontName)
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.6))
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(Color.white.opacity(0.08))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .stroke(Color.white.opacity(0.15), lineWidth: 0.5)
+                    )
+                    .contentShape(Rectangle())
                 }
-                .labelsHidden()
+                .menuIndicator(.hidden)
+                .menuStyle(.button)
+                .buttonStyle(.plain)
                 .frame(maxWidth: .infinity)
             }
 
@@ -450,7 +472,7 @@ struct ConfigPanelView: View {
                 Text("\(Int(settings.baseFontSize))")
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundStyle(.white.opacity(0.7))
-                    .frame(width: 28, alignment: .trailing)
+                    .frame(width: 36, alignment: .trailing)
             }
 
             row("Shade") {
@@ -468,8 +490,9 @@ struct ConfigPanelView: View {
                     .controlSize(.small)
             }
         }
-        .padding(20)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .foregroundStyle(.white)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -669,7 +692,7 @@ final class Controller: NSObject, NSWindowDelegate {
         guard let screen = NSScreen.main else { return }
         let vf = screen.visibleFrame
         let w: CGFloat = 540
-        let h: CGFloat = 240
+        let h: CGFloat = 170
         let gap: CGFloat = 16
         let margin: CGFloat = 20
 

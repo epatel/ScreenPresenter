@@ -11,6 +11,9 @@ APP_NAME      ?= ScreenPresenter
 DISPLAY_NAME  ?= Screen Presenter
 BUNDLE_ID     ?= com.epatel.ScreenPresenter
 VERSION       := $(shell cat VERSION)
+BUILD_NUMBER  := $(shell git rev-list --count HEAD 2>/dev/null || echo 0)
+
+LSREGISTER    := /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 
 BUILD_DIR     := build
 RELEASE_BIN   := .build/release/$(APP_NAME)
@@ -31,7 +34,7 @@ APPLE_ID            ?=
 TEAM_ID       ?=
 APP_PASSWORD  ?=
 
-.PHONY: help version build release run app icon sign verify zip notarize staple dmg open clean \
+.PHONY: help version build release run app icon sign verify zip notarize staple dmg open register clean \
         bump-patch bump-minor bump-major
 
 .DEFAULT_GOAL := help
@@ -50,6 +53,7 @@ help:
 	@echo "  staple      staple the notarization ticket"
 	@echo "  dmg         build a distribution .dmg"
 	@echo "  open        open the built .app"
+	@echo "  register    refresh Launch Services for the built .app"
 	@echo "  clean       remove build artifacts"
 	@echo "  version     print VERSION"
 	@echo "  bump-patch  VERSION +0.0.1"
@@ -57,7 +61,7 @@ help:
 	@echo "  bump-major  VERSION +1.0.0 and zero minor/patch"
 
 version:
-	@echo $(VERSION)
+	@echo "$(VERSION) ($(BUILD_NUMBER))"
 
 build:
 	swift build
@@ -95,13 +99,14 @@ $(ICNS): $(ICON_SRC)
 # ---------- Bundle ----------
 
 app: release $(ICNS)
-	@echo "Building $(APP_BUNDLE) v$(VERSION)"
+	@echo "Building $(APP_BUNDLE) v$(VERSION) ($(BUILD_NUMBER))"
 	rm -rf $(APP_BUNDLE)
 	mkdir -p $(APP_BUNDLE)/Contents/MacOS
 	mkdir -p $(APP_BUNDLE)/Contents/Resources
 	cp $(RELEASE_BIN) $(APP_BUNDLE)/Contents/MacOS/$(APP_NAME)
 	cp $(ICNS) $(APP_BUNDLE)/Contents/Resources/AppIcon.icns
 	@sed -e 's/__VERSION__/$(VERSION)/g' \
+	     -e 's/__BUILD__/$(BUILD_NUMBER)/g' \
 	     -e 's/__BUNDLE_ID__/$(BUNDLE_ID)/g' \
 	     -e 's/__EXECUTABLE__/$(APP_NAME)/g' \
 	     -e 's/__NAME__/$(APP_NAME)/g' \
@@ -111,6 +116,9 @@ app: release $(ICNS)
 	@if [ -d images ]; then cp -R images $(APP_BUNDLE)/Contents/Resources/; fi
 	@# Ship Google Fonts at a path where Bundle.main.url(forResource: "Fonts") finds them.
 	@if [ -d Sources/ScreenPresenter/Fonts ]; then cp -R Sources/ScreenPresenter/Fonts $(APP_BUNDLE)/Contents/Resources/; fi
+	@# Refresh Launch Services so Finder immediately recognizes the bundle's
+	@# CFBundleDocumentTypes (drag .md onto the .app, "Open With", etc.).
+	@$(LSREGISTER) -f $(APP_BUNDLE) >/dev/null 2>&1 || true
 
 # ---------- Sign ----------
 
@@ -163,6 +171,12 @@ dmg: staple
 
 open: app
 	open $(APP_BUNDLE)
+
+# Re-register the bundle with Launch Services. Useful if dropping .md onto the
+# .app in Finder stops launching (stale LaunchServices cache).
+register:
+	$(LSREGISTER) -f $(APP_BUNDLE)
+	@echo "Re-registered $(APP_BUNDLE) with Launch Services."
 
 clean:
 	rm -rf $(BUILD_DIR) .build
