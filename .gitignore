@@ -1,0 +1,6 @@
+.env
+.build/
+build/
+*.icns
+icon-original.png
+.DS_Store
