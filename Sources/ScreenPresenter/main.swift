@@ -602,6 +602,7 @@ final class Controller: NSObject, NSWindowDelegate {
         p.backgroundColor = .clear
         p.hasShadow = true
         p.hidesOnDeactivate = false
+        p.canHide = false
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         p.onKey = { [weak self] code in self?.handleKey(code) }
 
@@ -655,10 +656,12 @@ final class Controller: NSObject, NSWindowDelegate {
     private func show(withConfig: Bool) {
         guard !isShown else { return }
         isShown = true
-        // Resume by advancing from the last viewed slide, but stay on the first
-        // slide if we never moved past it. next() clamps at the last slide.
         if state.index > 0 { state.next() }
         recenterPanel()
+        // Promote to a regular app while visible so the window server actually
+        // renders our floating panel; accessory-policy apps can have panels
+        // silently not-display when orderFront is called from a non-active state.
+        NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         backdrop.orderFront(nil)
         panel.makeKeyAndOrderFront(nil)
@@ -686,6 +689,8 @@ final class Controller: NSObject, NSWindowDelegate {
         backdrop.orderOut(nil)
         configPanel?.orderOut(nil)
         configPanel = nil
+        // Go back to being a dockless utility.
+        NSApp.setActivationPolicy(.accessory)
     }
 
     private func showConfigPanel() {
@@ -779,8 +784,12 @@ final class AppDelegateShim: NSObject, NSApplicationDelegate {
 
     // Fires on: drop onto the .app in Finder, "Open With", or `open -a ... file.md`.
     // Covers both cold-launch and while-running cases.
+    // Deferred to the next runloop tick because on cold launch this can fire
+    // before the window server is fully ready for our floating panel.
     func application(_ application: NSApplication, open urls: [URL]) {
         guard let url = urls.first else { return }
-        controller.loadDeck(from: url)
+        DispatchQueue.main.async { [controller] in
+            controller.loadDeck(from: url)
+        }
     }
 }

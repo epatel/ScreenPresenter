@@ -26,6 +26,30 @@ After the first open, move the mouse to the top-right corner of the main screen
 to show the presenter. A faint red 40×40 zone marks the trigger area (set its
 alpha to 0 in `buildCornerTrigger` to hide it).
 
+## Opening a deck
+
+Three ways to point the app at a `.md` file:
+
+```sh
+# 1. CLI arg (dev build only):
+swift run ScreenPresenter deck.md
+
+# 2. Drop the .md onto ScreenPresenter.app in Finder, or right-click ->
+#    "Open With" -> ScreenPresenter. When the app isn't running this launches
+#    it with the file; when it is, the deck is swapped in place.
+
+# 3. From the terminal, targeting the installed .app:
+open -a ~/Applications/ScreenPresenter.app deck.md
+```
+
+A dropped file resets the slide index to 0 and clears any per-slide shade
+settings from the previous deck.
+
+> **Note:** while the presenter is visible, the app temporarily elevates from
+> `LSUIElement` (no dock icon) to a regular app so the window server actually
+> renders the floating panel. A dock icon appears briefly; dismissing the
+> panel (Esc / click outside) reverts to dockless.
+
 ## Controls
 
 | Key | Action |
@@ -96,9 +120,15 @@ list them.
 ```sh
 make release       # swift build -c release
 make icon          # build/AppIcon.icns from icon.png (1024×1024)
-make app           # build/ScreenPresenter.app
+make app           # build/ScreenPresenter.app (also refreshes Launch Services)
 make open          # launch the built .app
+make register      # force-refresh Launch Services for the built .app
 ```
+
+`make app` runs `lsregister -f` on the bundle automatically so Finder
+picks up the document-type associations without a restart. `make register`
+is available if you've moved the `.app` elsewhere and need a standalone
+refresh.
 
 ### Signing and notarization
 
@@ -126,11 +156,15 @@ The Makefile also supports optional overrides in `.env` for
 
 ### Version management
 
-Version comes from the `VERSION` file (substituted into `Info.plist`
-at `make app` time):
+Displayed version is `a.b.c (d)`:
+
+- **`a.b.c`** — marketing version from `VERSION`, written to `CFBundleShortVersionString`.
+- **`d`** — build number from `git rev-list --count HEAD`, written to `CFBundleVersion`.
+
+Both are substituted into `Info.plist` at `make app` time.
 
 ```sh
-make version       # print current
+make version       # e.g. "0.1.0 (12)"
 make bump-patch    # 0.1.0 -> 0.1.1
 make bump-minor    # 0.1.0 -> 0.2.0
 make bump-major    # 0.1.0 -> 1.0.0
@@ -141,7 +175,7 @@ make bump-major    # 0.1.0 -> 1.0.0
 ```
 Package.swift               SwiftPM executable + Fonts as resources
 Sources/ScreenPresenter/
-  main.swift                entire app (~500 lines)
+  main.swift                entire app (~800 lines)
   Fonts/                    bundled Google Fonts (.ttf, variable)
 Resources/
   Info.plist.template       placeholders substituted by make app
