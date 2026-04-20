@@ -64,7 +64,7 @@ settings from the previous deck.
 
 Standard markdown plus a few presentation-specific directives.
 
-```markdown
+````markdown
 # Slide title
 
 Regular paragraph with **bold**, *italic*, and `inline code`.
@@ -89,7 +89,7 @@ Right column.
 ```swift
 let greeting = "hello"
 ```
-```
+````
 
 Supported directives:
 
