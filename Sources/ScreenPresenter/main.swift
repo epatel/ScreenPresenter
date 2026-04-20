@@ -108,6 +108,10 @@ final class PresenterSettings: ObservableObject {
         shadeByIndex[index] = v
     }
 
+    func resetPerSlideSettings() {
+        shadeByIndex.removeAll()
+    }
+
     func font(size: CGFloat) -> Font {
         if fontName == "System" {
             return .system(size: size)
@@ -294,7 +298,7 @@ struct CodeBlockView: View {
 
 final class PresenterState: ObservableObject {
     @Published var index: Int = 0
-    let deck: Deck
+    @Published var deck: Deck
 
     init(deck: Deck) { self.deck = deck }
 
@@ -519,6 +523,17 @@ final class Controller: NSObject, NSWindowDelegate {
         buildCornerTrigger()
     }
 
+    // Called when macOS hands us a file via Finder drop / "Open With" / `open -a`.
+    func loadDeck(from url: URL) {
+        let newDeck = Deck.load(from: url.path)
+        state.deck = newDeck
+        state.index = 0
+        settings.resetPerSlideSettings()
+        NSLog("ScreenPresenter: loaded deck \(url.lastPathComponent) with \(newDeck.slides.count) slides")
+        // Show the presenter immediately so the user sees the result of the drop.
+        if !isShown { show(withConfig: false) }
+    }
+
     // Full-screen darkened window behind the panel.
     private func buildBackdrop() {
         let screen = NSScreen.main ?? NSScreen.screens[0]
@@ -734,7 +749,15 @@ app.run()
 final class AppDelegateShim: NSObject, NSApplicationDelegate {
     let controller: Controller
     init(controller: Controller) { self.controller = controller }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         controller.start()
+    }
+
+    // Fires on: drop onto the .app in Finder, "Open With", or `open -a ... file.md`.
+    // Covers both cold-launch and while-running cases.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        guard let url = urls.first else { return }
+        controller.loadDeck(from: url)
     }
 }
