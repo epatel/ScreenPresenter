@@ -11,7 +11,8 @@ let package = Package(
         .executableTarget(
             name: "ScreenPresenter",
             dependencies: ["Highlightr"],
-            path: "Sources/ScreenPresenter"
+            path: "Sources/ScreenPresenter",
+            resources: [.copy("Fonts")]
         )
     ]
 )

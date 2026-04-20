@@ -109,6 +109,8 @@ app: release $(ICNS)
 	@# Bundle the default deck so the app has something to show when no path is passed.
 	@if [ -f sample.md ]; then cp sample.md $(APP_BUNDLE)/Contents/Resources/; fi
 	@if [ -d images ]; then cp -R images $(APP_BUNDLE)/Contents/Resources/; fi
+	@# Ship Google Fonts at a path where Bundle.main.url(forResource: "Fonts") finds them.
+	@if [ -d Sources/ScreenPresenter/Fonts ]; then cp -R Sources/ScreenPresenter/Fonts $(APP_BUNDLE)/Contents/Resources/; fi
 
 # ---------- Sign ----------
 

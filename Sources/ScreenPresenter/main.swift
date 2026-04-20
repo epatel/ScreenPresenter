@@ -1,6 +1,28 @@
 import AppKit
+import CoreText
 import Highlightr
 import SwiftUI
+
+// MARK: - Font registration
+
+enum FontLoader {
+    // Register every .ttf/.otf in a bundled Fonts directory. Tries Bundle.main
+    // first (inside the .app) then Bundle.module (SPM dev build).
+    static func registerBundledFonts() {
+        let candidates: [Bundle] = [.main, .module]
+        for bundle in candidates {
+            guard let dir = bundle.url(forResource: "Fonts", withExtension: nil) else { continue }
+            let files = (try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? []
+            for url in files where ["ttf", "otf"].contains(url.pathExtension.lowercased()) {
+                var err: Unmanaged<CFError>?
+                if !CTFontManagerRegisterFontsForURL(url as CFURL, .process, &err) {
+                    NSLog("ScreenPresenter: failed to register font \(url.lastPathComponent): \(err?.takeRetainedValue().localizedDescription ?? "unknown")")
+                }
+            }
+            return  // stop at the first bundle that had the Fonts dir
+        }
+    }
+}
 
 // MARK: - Slide model
 
@@ -58,6 +80,52 @@ struct Deck {
     }
 }
 
+// MARK: - Settings (live-adjustable via the config panel)
+
+final class PresenterSettings: ObservableObject {
+    @Published var fontName: String = "System"
+    @Published var baseFontSize: CGFloat = 24
+    @Published private var shadeByIndex: [Int: Double] = [:]
+
+    static let defaultShade: Double = 0.45
+    static let fontOptions = [
+        "System",
+        // Bundled Google Fonts (loaded at launch from Resources/Fonts).
+        "Inter", "Space Grotesk",
+        "Merriweather", "Playfair Display",
+        "JetBrains Mono",
+        // System-installed fallbacks.
+        "SF Mono", "Menlo", "Monaco",
+        "Georgia", "Times New Roman",
+        "Helvetica Neue", "Avenir Next", "Palatino",
+    ]
+
+    func shade(for index: Int) -> Double {
+        shadeByIndex[index] ?? Self.defaultShade
+    }
+
+    func setShade(_ v: Double, for index: Int) {
+        shadeByIndex[index] = v
+    }
+
+    func font(size: CGFloat) -> Font {
+        if fontName == "System" {
+            return .system(size: size)
+        }
+        return .custom(fontName, size: size)
+    }
+
+    func nsFont(size: CGFloat, monospaced: Bool = false) -> NSFont {
+        if monospaced {
+            return NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
+        }
+        if fontName == "System" {
+            return NSFont.systemFont(ofSize: size)
+        }
+        return NSFont(name: fontName, size: size) ?? NSFont.systemFont(ofSize: size)
+    }
+}
+
 // MARK: - Markdown rendering
 
 enum Block {
@@ -72,6 +140,7 @@ enum Block {
 struct MarkdownSlide: View {
     let text: String
     let baseDir: URL
+    @EnvironmentObject var settings: PresenterSettings
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -85,22 +154,24 @@ struct MarkdownSlide: View {
 
     private var blocks: [Block] { Self.parse(text) }
 
+    private var base: CGFloat { settings.baseFontSize }
+
     @ViewBuilder
     private func render(block: Block) -> some View {
         switch block {
         case .heading(1, let s):
-            Text(inline(s)).font(.system(size: 56, weight: .bold))
+            Text(inline(s)).font(settings.font(size: base * 2.33)).fontWeight(.bold)
         case .heading(2, let s):
-            Text(inline(s)).font(.system(size: 40, weight: .semibold))
+            Text(inline(s)).font(settings.font(size: base * 1.67)).fontWeight(.semibold)
         case .heading(_, let s):
-            Text(inline(s)).font(.system(size: 30, weight: .semibold))
+            Text(inline(s)).font(settings.font(size: base * 1.25)).fontWeight(.semibold)
         case .bullet(let s):
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text("•").font(.system(size: 24))
-                Text(inline(s)).font(.system(size: 24))
+                Text("•").font(settings.font(size: base))
+                Text(inline(s)).font(settings.font(size: base))
             }
         case .paragraph(let s):
-            Text(inline(s)).font(.system(size: 24))
+            Text(inline(s)).font(settings.font(size: base))
         case .blank:
             Spacer().frame(height: 8)
         case .image(_, let path):
@@ -190,16 +261,16 @@ struct MarkdownSlide: View {
 struct CodeBlockView: View {
     let language: String
     let source: String
+    @EnvironmentObject var settings: PresenterSettings
 
     static let highlightr: Highlightr = {
         let h = Highlightr()!
         h.setTheme(to: "atom-one-dark")
-        h.theme.setCodeFont(NSFont.monospacedSystemFont(ofSize: 18, weight: .regular))
         return h
     }()
 
     var body: some View {
-        Text(highlighted)
+        Text(highlighted(size: settings.baseFontSize * 0.75))
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
@@ -208,7 +279,10 @@ struct CodeBlockView: View {
             )
     }
 
-    private var highlighted: AttributedString {
+    private func highlighted(size: CGFloat) -> AttributedString {
+        Self.highlightr.theme.setCodeFont(
+            NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
+        )
         let lang = language.isEmpty ? nil : language
         let ns = Self.highlightr.highlight(source, as: lang)
             ?? NSAttributedString(string: source)
@@ -251,7 +325,8 @@ final class PresenterPanel: NSPanel {
 // MARK: - Corner trigger view
 
 final class CornerView: NSView {
-    var onEnter: (() -> Void)?
+    // Bool parameter: true if Shift was held when the mouse entered.
+    var onEnter: ((Bool) -> Void)?
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
@@ -266,11 +341,11 @@ final class CornerView: NSView {
     }
 
     override func mouseEntered(with event: NSEvent) {
-        NSLog("ScreenPresenter: mouseEntered corner")
-        onEnter?()
+        let shift = event.modifierFlags.contains(.shift)
+        NSLog("ScreenPresenter: mouseEntered corner shift=\(shift)")
+        onEnter?(shift)
     }
 
-    // Ensure hit testing works on a fully transparent view.
     override func hitTest(_ point: NSPoint) -> NSView? { self }
 }
 
@@ -278,10 +353,12 @@ final class CornerView: NSView {
 
 struct PresenterContent: View {
     @ObservedObject var state: PresenterState
+    @EnvironmentObject var settings: PresenterSettings
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
         let bg = backgroundImage
+        let shadeAmount = settings.shade(for: state.index)
         ZStack(alignment: .bottomTrailing) {
             // Background fills the whole frame. Color.clear provides the sizing;
             // the image (if any) paints behind it via .background.
@@ -295,7 +372,7 @@ struct PresenterContent: View {
                         }
                     }
                 )
-                .overlay(bg != nil ? Color.black.opacity(0.45) : Color.clear)
+                .overlay(bg != nil ? Color.black.opacity(shadeAmount) : Color.clear)
                 .clipShape(shape)
 
             shape.strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
@@ -338,11 +415,95 @@ struct PresenterContent: View {
     }
 }
 
+// MARK: - Config panel (opened when the corner is entered with Shift held)
+
+struct ConfigPanelView: View {
+    @ObservedObject var settings: PresenterSettings
+    @ObservedObject var state: PresenterState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text("Settings").font(.system(size: 14, weight: .semibold))
+                Spacer()
+                Text("Slide \(state.index + 1) of \(state.deck.slides.count)")
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.5))
+            }
+
+            row("Font") {
+                Picker("", selection: $settings.fontName) {
+                    ForEach(PresenterSettings.fontOptions, id: \.self) { name in
+                        Text(name).tag(name)
+                    }
+                }
+                .labelsHidden()
+                .frame(maxWidth: .infinity)
+            }
+
+            row("Size") {
+                Slider(value: $settings.baseFontSize, in: 14...40, step: 1)
+                Text("\(Int(settings.baseFontSize))")
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .frame(width: 28, alignment: .trailing)
+            }
+
+            row("Shade") {
+                Slider(value: shadeBinding, in: 0...1, step: 0.05)
+                Text(String(format: "%.2f", shadeBinding.wrappedValue))
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .frame(width: 36, alignment: .trailing)
+            }
+
+            HStack {
+                Spacer()
+                Button("Quit") { NSApp.terminate(nil) }
+                    .keyboardShortcut("q", modifiers: [.command])
+                    .controlSize(.small)
+            }
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .foregroundStyle(.white)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(nsColor: NSColor(calibratedWhite: 0.12, alpha: 0.97)))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                )
+        )
+    }
+
+    private var shadeBinding: Binding<Double> {
+        Binding(
+            get: { settings.shade(for: state.index) },
+            set: { settings.setShade($0, for: state.index) }
+        )
+    }
+
+    @ViewBuilder
+    private func row<Content: View>(_ label: String, @ViewBuilder _ content: () -> Content) -> some View {
+        HStack(spacing: 12) {
+            Text(label)
+                .font(.system(size: 13))
+                .foregroundStyle(.white.opacity(0.7))
+                .frame(width: 60, alignment: .leading)
+            content()
+        }
+    }
+}
+
 // MARK: - App controller
 
 final class Controller: NSObject, NSWindowDelegate {
     let state: PresenterState
+    let settings = PresenterSettings()
     var panel: PresenterPanel!
+    var panelBaseSize: NSSize = .zero
+    var configPanel: NSPanel?
     var backdrop: NSWindow!
     var corner: NSWindow!
     var mouseMonitor: Any?
@@ -406,11 +567,14 @@ final class Controller: NSObject, NSWindowDelegate {
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         p.onKey = { [weak self] code in self?.handleKey(code) }
 
-        let host = NSHostingView(rootView: PresenterContent(state: state))
+        let host = NSHostingView(
+            rootView: PresenterContent(state: state).environmentObject(settings)
+        )
         host.frame = p.contentView!.bounds
         host.autoresizingMask = [.width, .height]
         p.contentView?.addSubview(host)
         panel = p
+        panelBaseSize = rect.size
     }
 
     // Small window at the top-right corner that triggers show on mouse enter.
@@ -439,7 +603,7 @@ final class Controller: NSObject, NSWindowDelegate {
         win.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
 
         let view = CornerView(frame: NSRect(origin: .zero, size: rect.size))
-        view.onEnter = { [weak self] in self?.show() }
+        view.onEnter = { [weak self] shift in self?.show(withConfig: shift) }
         win.contentView = view
         win.orderFrontRegardless()
         NSLog("ScreenPresenter: corner trigger at \(rect)")
@@ -450,15 +614,31 @@ final class Controller: NSObject, NSWindowDelegate {
         hide()
     }
 
-    private func show() {
+    private func show(withConfig: Bool) {
         guard !isShown else { return }
         isShown = true
         // Resume by advancing from the last viewed slide, but stay on the first
         // slide if we never moved past it. next() clamps at the last slide.
         if state.index > 0 { state.next() }
+        recenterPanel()
         NSApp.activate(ignoringOtherApps: true)
         backdrop.orderFront(nil)
         panel.makeKeyAndOrderFront(nil)
+        if withConfig { showConfigPanel() }
+    }
+
+    // Restore the panel to its original size and center it on visibleFrame.
+    // showConfigPanel() may resize/reposition afterward if needed.
+    private func recenterPanel() {
+        guard let screen = NSScreen.main else { return }
+        let vf = screen.visibleFrame
+        let rect = NSRect(
+            x: vf.midX - panelBaseSize.width / 2,
+            y: vf.midY - panelBaseSize.height / 2,
+            width: panelBaseSize.width,
+            height: panelBaseSize.height
+        )
+        panel.setFrame(rect, display: true)
     }
 
     private func hide() {
@@ -466,6 +646,56 @@ final class Controller: NSObject, NSWindowDelegate {
         isShown = false
         panel.orderOut(nil)
         backdrop.orderOut(nil)
+        configPanel?.orderOut(nil)
+        configPanel = nil
+    }
+
+    private func showConfigPanel() {
+        guard let screen = NSScreen.main else { return }
+        let vf = screen.visibleFrame
+        let w: CGFloat = 540
+        let h: CGFloat = 240
+        let gap: CGFloat = 16
+        let margin: CGFloat = 20
+
+        // Fit the presenter+config pair inside visibleFrame: shrink the presenter
+        // if needed, then center the whole group vertically.
+        var pFrame = panel.frame
+        let maxPanelH = vf.height - h - gap - margin * 2
+        if pFrame.height > maxPanelH {
+            pFrame.size.height = max(maxPanelH, 300)
+        }
+        let totalH = pFrame.height + gap + h
+        pFrame.origin.x = vf.midX - pFrame.width / 2
+        pFrame.origin.y = vf.midY + totalH / 2 - pFrame.height
+        panel.setFrame(pFrame, display: true)
+
+        let rect = NSRect(
+            x: vf.midX - w / 2,
+            y: pFrame.minY - gap - h,
+            width: w, height: h
+        )
+        let cp = NSPanel(
+            contentRect: rect,
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        cp.isFloatingPanel = true
+        cp.level = .floating
+        cp.isOpaque = false
+        cp.backgroundColor = .clear
+        cp.hasShadow = true
+        cp.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+
+        let host = NSHostingView(
+            rootView: ConfigPanelView(settings: settings, state: state)
+        )
+        host.frame = cp.contentView!.bounds
+        host.autoresizingMask = [.width, .height]
+        cp.contentView?.addSubview(host)
+        cp.orderFront(nil)
+        configPanel = cp
     }
 
     private func handleKey(_ code: UInt16) {
@@ -490,6 +720,8 @@ let resolvedPath: String = {
     return "sample.md"
 }()
 let deck = Deck.load(from: resolvedPath)
+
+FontLoader.registerBundledFonts()
 
 let app = NSApplication.shared
 app.setActivationPolicy(.accessory)
