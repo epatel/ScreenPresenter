@@ -59,6 +59,10 @@ struct Deck {
     let slides: [Slide]
 
     static func load(from path: String) -> Deck {
+        var isDir: ObjCBool = false
+        if FileManager.default.fileExists(atPath: path, isDirectory: &isDir), isDir.boolValue {
+            return loadFolder(URL(fileURLWithPath: path))
+        }
         let url = URL(fileURLWithPath: path)
         let baseDir = url.deletingLastPathComponent()
         let fallback = """
@@ -77,6 +81,34 @@ struct Deck {
         let content = (try? String(contentsOfFile: path, encoding: .utf8)) ?? fallback
         let slides = content.components(separatedBy: "\n---\n").map { Slide.parse($0) }
         return Deck(baseDir: baseDir, slides: slides)
+    }
+
+    // One slide per image file in the folder, ordered by filename (Finder-style).
+    // The image is used as the slide background so it fills the panel.
+    static func loadFolder(_ url: URL) -> Deck {
+        let exts: Set<String> = [
+            "jpg", "jpeg", "png", "heic", "heif", "gif",
+            "webp", "tiff", "tif", "bmp",
+        ]
+        let files = (try? FileManager.default.contentsOfDirectory(
+            at: url, includingPropertiesForKeys: nil
+        )) ?? []
+        let images = files
+            .filter { exts.contains($0.pathExtension.lowercased()) }
+            .sorted {
+                $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent)
+                    == .orderedAscending
+            }
+        if images.isEmpty {
+            return Deck(
+                baseDir: url,
+                slides: [Slide(background: nil, columns: ["# No images in folder"])]
+            )
+        }
+        let slides = images.map {
+            Slide(background: $0.lastPathComponent, columns: [""])
+        }
+        return Deck(baseDir: url, slides: slides)
     }
 }
 
@@ -546,12 +578,20 @@ final class Controller: NSObject, NSWindowDelegate {
         buildCornerTrigger()
     }
 
-    // Called when macOS hands us a file via Finder drop / "Open With" / `open -a`.
+    // Called when macOS hands us a file or folder via Finder drop / "Open With"
+    // / `open -a`. A folder becomes a photo deck (one image per slide).
     func loadDeck(from url: URL) {
         let newDeck = Deck.load(from: url.path)
         state.deck = newDeck
         state.index = 0
         settings.resetPerSlideSettings()
+        var isDir: ObjCBool = false
+        if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir),
+           isDir.boolValue {
+            for i in 0..<newDeck.slides.count {
+                settings.setShade(0, for: i)
+            }
+        }
         UserDefaults.standard.set(url.path, forKey: "lastDeckPath")
         NSLog("ScreenPresenter: loaded deck \(url.lastPathComponent) with \(newDeck.slides.count) slides")
         // Show the presenter immediately so the user sees the result of the drop.
