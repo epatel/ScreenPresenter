@@ -552,6 +552,7 @@ final class Controller: NSObject, NSWindowDelegate {
         state.deck = newDeck
         state.index = 0
         settings.resetPerSlideSettings()
+        UserDefaults.standard.set(url.path, forKey: "lastDeckPath")
         NSLog("ScreenPresenter: loaded deck \(url.lastPathComponent) with \(newDeck.slides.count) slides")
         // Show the presenter immediately so the user sees the result of the drop.
         if !isShown { show(withConfig: false) }
@@ -756,6 +757,11 @@ final class Controller: NSObject, NSWindowDelegate {
 let args = CommandLine.arguments
 let resolvedPath: String = {
     if args.count > 1 { return args[1] }
+    // Remember the last file opened via drop / "Open With" / `open -a`.
+    if let last = UserDefaults.standard.string(forKey: "lastDeckPath"),
+       FileManager.default.fileExists(atPath: last) {
+        return last
+    }
     // When running from the .app bundle, fall back to Resources/sample.md.
     if let bundled = Bundle.main.path(forResource: "sample", ofType: "md") {
         return bundled
