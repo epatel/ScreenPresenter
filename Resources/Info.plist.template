@@ -30,6 +30,16 @@
     <true/>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <!--
+            Allows cleartext http to loopback / .local hosts only. Needed so
+            WKWebView can load the in-process YouTube-embed page served from
+            http://127.0.0.1:<port>/. Does not relax ATS for any other traffic.
+        -->
+        <key>NSAllowsLocalNetworking</key>
+        <true/>
+    </dict>
     <key>CFBundleDocumentTypes</key>
     <array>
         <dict>

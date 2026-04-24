@@ -100,6 +100,7 @@ Supported directives:
 | `<!-- bg: path -->` | Per-slide background image |
 | ` ```lang ` fenced block | Syntax-highlighted code |
 | `![alt](path)` | Image — path relative to the `.md` file, absolute, or `~/...` |
+| `![alt](https://youtu.be/ID?t=20)` | YouTube — shows the thumbnail; click to play inline. Accepts `youtu.be/ID`, `youtube.com/watch?v=ID`, `/shorts/ID`, with optional `t=`/`start=` |
 
 ## Config panel
 

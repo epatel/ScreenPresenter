@@ -38,6 +38,14 @@ Paths are relative to the `.md` file.
 
 ---
 
+## YouTube
+
+![GPT5.5](https://youtu.be/tNV9_I-zLO0?t=20)
+
+Click the thumbnail to play inline.
+
+---
+
 ## Syntax highlighting
 
 ```swift

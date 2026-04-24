@@ -1,7 +1,9 @@
 import AppKit
 import CoreText
 import Highlightr
+import Network
 import SwiftUI
+import WebKit
 
 // MARK: - Font registration
 
@@ -162,6 +164,16 @@ final class PresenterSettings: ObservableObject {
     }
 }
 
+// MARK: - Video playback (shared between YouTubeBlock and PresenterContent)
+
+final class VideoPlayback: ObservableObject {
+    struct Playing: Equatable {
+        let videoId: String
+        let start: Int
+    }
+    @Published var active: Playing?
+}
+
 // MARK: - Markdown rendering
 
 enum Block {
@@ -169,8 +181,62 @@ enum Block {
     case bullet(String)
     case paragraph(String)
     case image(alt: String, path: String)
+    case youtube(videoId: String, start: Int, alt: String)
     case code(language: String, source: String)
     case blank
+}
+
+// MARK: - YouTube link parsing
+
+struct YouTubeLink {
+    let videoId: String
+    let start: Int
+
+    static func from(_ urlString: String) -> YouTubeLink? {
+        guard let url = URL(string: urlString), let host = url.host?.lowercased() else {
+            return nil
+        }
+        var id: String?
+        if host == "youtu.be" || host.hasSuffix(".youtu.be") {
+            let p = url.path
+            if p.count > 1 { id = String(p.dropFirst()) }
+        } else if host.contains("youtube.com") || host.contains("youtube-nocookie.com") {
+            let comps = URLComponents(url: url, resolvingAgainstBaseURL: false)
+            if let v = comps?.queryItems?.first(where: { $0.name == "v" })?.value {
+                id = v
+            } else {
+                let parts = url.pathComponents.filter { $0 != "/" }
+                if parts.count >= 2, ["embed", "shorts", "v", "live"].contains(parts[0]) {
+                    id = parts[1]
+                }
+            }
+        }
+        guard let vid = id, !vid.isEmpty else { return nil }
+        let comps = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        let t = comps?.queryItems?.first(where: { $0.name == "t" || $0.name == "start" })?.value
+        return YouTubeLink(videoId: vid, start: parseDuration(t ?? ""))
+    }
+
+    // Accepts "20", "20s", "1m30s", "1h2m3s".
+    static func parseDuration(_ s: String) -> Int {
+        if s.isEmpty { return 0 }
+        if let i = Int(s) { return i }
+        var total = 0
+        var cur = 0
+        for c in s {
+            if let d = c.wholeNumberValue {
+                cur = cur * 10 + d
+            } else {
+                switch c {
+                case "h", "H": total += cur * 3600; cur = 0
+                case "m", "M": total += cur * 60; cur = 0
+                case "s", "S": total += cur; cur = 0
+                default: break
+                }
+            }
+        }
+        return total + cur
+    }
 }
 
 struct MarkdownSlide: View {
@@ -222,6 +288,8 @@ struct MarkdownSlide: View {
                     .font(.system(size: 16, design: .monospaced))
                     .foregroundStyle(.red.opacity(0.8))
             }
+        case .youtube(let vid, let start, _):
+            YouTubeBlock(videoId: vid, start: start)
         case .code(let lang, let source):
             CodeBlockView(language: lang, source: source)
         }
@@ -262,7 +330,11 @@ struct MarkdownSlide: View {
                 continue
             }
             if let img = parseImage(line) {
-                blocks.append(.image(alt: img.alt, path: img.path))
+                if let yt = YouTubeLink.from(img.path) {
+                    blocks.append(.youtube(videoId: yt.videoId, start: yt.start, alt: img.alt))
+                } else {
+                    blocks.append(.image(alt: img.alt, path: img.path))
+                }
             } else if line.hasPrefix("# ") {
                 blocks.append(.heading(1, String(line.dropFirst(2))))
             } else if line.hasPrefix("## ") {
@@ -323,6 +395,195 @@ struct CodeBlockView: View {
         let ns = Self.highlightr.highlight(source, as: lang)
             ?? NSAttributedString(string: source)
         return AttributedString(ns)
+    }
+}
+
+// MARK: - YouTube block (thumbnail → inline player on click)
+
+struct YouTubeBlock: View {
+    let videoId: String
+    let start: Int
+    @State private var thumbnail: NSImage?
+    @EnvironmentObject var videoPlayback: VideoPlayback
+
+    var body: some View {
+        ZStack {
+            if let img = thumbnail {
+                Image(nsImage: img)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Color(white: 0.12)
+            }
+            Image(systemName: "play.circle.fill")
+                .font(.system(size: 72))
+                .symbolRenderingMode(.palette)
+                .foregroundStyle(.white, Color.red.opacity(0.9))
+                .shadow(color: .black.opacity(0.5), radius: 10)
+        }
+        .aspectRatio(16.0 / 9.0, contentMode: .fit)
+        .frame(maxWidth: .infinity)
+        .background(Color.black)
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .contentShape(Rectangle())
+        .onTapGesture {
+            videoPlayback.active = .init(videoId: videoId, start: start)
+        }
+        .onAppear(perform: loadThumbnail)
+    }
+
+    private func loadThumbnail() {
+        guard thumbnail == nil else { return }
+        let candidates = [
+            "https://img.youtube.com/vi/\(videoId)/maxresdefault.jpg",
+            "https://img.youtube.com/vi/\(videoId)/hqdefault.jpg",
+        ]
+        DispatchQueue.global(qos: .userInitiated).async {
+            for s in candidates {
+                guard let url = URL(string: s),
+                      let data = try? Data(contentsOf: url),
+                      let img = NSImage(data: data),
+                      img.size.width > 50 else { continue }
+                DispatchQueue.main.async { self.thumbnail = img }
+                return
+            }
+        }
+    }
+}
+
+struct YouTubeWebView: NSViewRepresentable {
+    let videoId: String
+    let start: Int
+
+    func makeNSView(context: Context) -> WKWebView {
+        let config = WKWebViewConfiguration()
+        config.mediaTypesRequiringUserActionForPlayback = []
+        let wv = WKWebView(frame: .zero, configuration: config)
+        wv.underPageBackgroundColor = .black
+        // YouTube's IFrame API rejects file:// and the synthetic origin that
+        // loadHTMLString produces (errors 152/153). Serving the embed page
+        // from a local HTTP loopback gives it a real http origin that the
+        // API accepts.
+        if let url = EmbedServer.shared.url(videoId: videoId, start: start) {
+            wv.load(URLRequest(url: url))
+        }
+        return wv
+    }
+
+    func updateNSView(_ nsView: WKWebView, context: Context) {}
+}
+
+// MARK: - Tiny localhost HTTP server (serves YouTube embed pages)
+//
+// The IFrame API wants a real http(s) parent origin. We stand up one
+// NWListener bound to 127.0.0.1 on an OS-assigned port and serve a
+// template page that boots the API for a given ?id=&start=.
+
+final class EmbedServer {
+    static let shared = EmbedServer()
+
+    private let queue = DispatchQueue(label: "EmbedServer")
+    private var listener: NWListener?
+    private var port: UInt16 = 0
+    private let ready = DispatchSemaphore(value: 0)
+    private var didSignal = false
+
+    private init() { startListener() }
+
+    func url(videoId: String, start: Int) -> URL? {
+        if port == 0 { _ = ready.wait(timeout: .now() + 2.0) }
+        guard port > 0 else { return nil }
+        var comps = URLComponents()
+        comps.scheme = "http"
+        comps.host = "127.0.0.1"
+        comps.port = Int(port)
+        comps.path = "/"
+        comps.queryItems = [
+            URLQueryItem(name: "id", value: videoId),
+            URLQueryItem(name: "start", value: String(start)),
+        ]
+        return comps.url
+    }
+
+    private func startListener() {
+        do {
+            let params = NWParameters.tcp
+            params.requiredLocalEndpoint = NWEndpoint.hostPort(host: "127.0.0.1", port: .any)
+            let l = try NWListener(using: params)
+            l.stateUpdateHandler = { [weak self, weak l] state in
+                guard let self = self else { return }
+                switch state {
+                case .ready:
+                    if let p = l?.port?.rawValue { self.port = p }
+                    self.signalReady()
+                case .failed, .cancelled:
+                    self.signalReady()
+                default: break
+                }
+            }
+            l.newConnectionHandler = { [weak self] c in self?.accept(c) }
+            l.start(queue: queue)
+            listener = l
+        } catch {
+            NSLog("EmbedServer failed to start: \(error)")
+            signalReady()
+        }
+    }
+
+    private func signalReady() {
+        queue.async {
+            if !self.didSignal { self.didSignal = true; self.ready.signal() }
+        }
+    }
+
+    private func accept(_ conn: NWConnection) {
+        conn.start(queue: queue)
+        conn.receive(minimumIncompleteLength: 1, maximumLength: 8192) { data, _, _, _ in
+            let req = data.flatMap { String(data: $0, encoding: .utf8) } ?? ""
+            let target = Self.requestTarget(req)
+            let body = Self.page(for: target).data(using: .utf8) ?? Data()
+            var header = "HTTP/1.1 200 OK\r\n"
+            header += "Content-Type: text/html; charset=utf-8\r\n"
+            header += "Content-Length: \(body.count)\r\n"
+            header += "Cache-Control: no-store\r\n"
+            header += "Connection: close\r\n\r\n"
+            var out = Data(header.utf8)
+            out.append(body)
+            conn.send(content: out, completion: .contentProcessed { _ in conn.cancel() })
+        }
+    }
+
+    private static func requestTarget(_ req: String) -> String {
+        guard let firstLine = req.split(separator: "\r\n", maxSplits: 1).first else { return "/" }
+        let parts = firstLine.split(separator: " ")
+        return parts.count >= 2 ? String(parts[1]) : "/"
+    }
+
+    private static func page(for target: String) -> String {
+        let comps = URLComponents(string: "http://x\(target)")
+        let items = comps?.queryItems ?? []
+        let rawId = items.first(where: { $0.name == "id" })?.value ?? ""
+        let start = Int(items.first(where: { $0.name == "start" })?.value ?? "0") ?? 0
+        // YouTube IDs are [A-Za-z0-9_-]+; strip anything else so we can't be
+        // tricked into injecting JS via the markdown URL.
+        let safeId = rawId.filter { $0.isLetter || $0.isNumber || $0 == "_" || $0 == "-" }
+        return """
+        <!doctype html><html><head><meta charset="utf-8">
+        <style>html,body{margin:0;padding:0;background:#000;height:100%;overflow:hidden}
+        #player{width:100%;height:100%}</style></head>
+        <body><div id="player"></div>
+        <script src="https://www.youtube.com/iframe_api"></script>
+        <script>
+        function onYouTubeIframeAPIReady() {
+          new YT.Player('player', {
+            videoId: '\(safeId)',
+            width: '100%', height: '100%',
+            playerVars: { autoplay: 1, playsinline: 1, rel: 0, start: \(start) },
+            events: { onReady: function(e){ e.target.playVideo(); } }
+          });
+        }
+        </script></body></html>
+        """
     }
 }
 
@@ -390,6 +651,7 @@ final class CornerView: NSView {
 struct PresenterContent: View {
     @ObservedObject var state: PresenterState
     @EnvironmentObject var settings: PresenterSettings
+    @EnvironmentObject var videoPlayback: VideoPlayback
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
@@ -422,6 +684,13 @@ struct PresenterContent: View {
                 .font(.system(size: 13, design: .monospaced))
                 .foregroundStyle(.white.opacity(0.6))
                 .padding(16)
+
+            if let p = videoPlayback.active {
+                YouTubeWebView(videoId: p.videoId, start: p.start)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color.black)
+                    .clipShape(shape)
+            }
         }
         .clipShape(shape)
     }
@@ -560,12 +829,14 @@ struct ConfigPanelView: View {
 final class Controller: NSObject, NSWindowDelegate {
     let state: PresenterState
     let settings = PresenterSettings()
+    let videoPlayback = VideoPlayback()
     var panel: PresenterPanel!
     var panelBaseSize: NSSize = .zero
     var configPanel: NSPanel?
     var backdrop: NSWindow!
     var corner: NSWindow!
     var mouseMonitor: Any?
+    var videoKeyMonitor: Any?
     var isShown = false
 
     init(deck: Deck) {
@@ -584,6 +855,7 @@ final class Controller: NSObject, NSWindowDelegate {
         let newDeck = Deck.load(from: url.path)
         state.deck = newDeck
         state.index = 0
+        videoPlayback.active = nil
         settings.resetPerSlideSettings()
         var isDir: ObjCBool = false
         if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir),
@@ -648,7 +920,9 @@ final class Controller: NSObject, NSWindowDelegate {
         p.onKey = { [weak self] code in self?.handleKey(code) }
 
         let host = NSHostingView(
-            rootView: PresenterContent(state: state).environmentObject(settings)
+            rootView: PresenterContent(state: state)
+                .environmentObject(settings)
+                .environmentObject(videoPlayback)
         )
         host.frame = p.contentView!.bounds
         host.autoresizingMask = [.width, .height]
@@ -706,7 +980,41 @@ final class Controller: NSObject, NSWindowDelegate {
         NSApp.activate(ignoringOtherApps: true)
         backdrop.orderFront(nil)
         panel.makeKeyAndOrderFront(nil)
+        installVideoKeyMonitor()
         if withConfig { showConfigPanel() }
+    }
+
+    // WKWebView captures keyDown when it's first responder, so PresenterPanel's
+    // keyDown override doesn't fire while a video is playing. A local event
+    // monitor runs ahead of the responder chain and intercepts keys only when
+    // a video overlay is active.
+    private func installVideoKeyMonitor() {
+        if videoKeyMonitor != nil { return }
+        videoKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self = self, self.videoPlayback.active != nil else { return event }
+            switch event.keyCode {
+            case 53:  // escape — close the video, keep the slide
+                self.videoPlayback.active = nil
+                return nil
+            case 49, 124, 36:  // space, right arrow, return — advance slide
+                self.videoPlayback.active = nil
+                self.state.next()
+                return nil
+            case 123:  // left arrow — previous slide
+                self.videoPlayback.active = nil
+                self.state.prev()
+                return nil
+            default:
+                return event
+            }
+        }
+    }
+
+    private func removeVideoKeyMonitor() {
+        if let m = videoKeyMonitor {
+            NSEvent.removeMonitor(m)
+            videoKeyMonitor = nil
+        }
     }
 
     // Restore the panel to its original size and center it on visibleFrame.
@@ -726,6 +1034,8 @@ final class Controller: NSObject, NSWindowDelegate {
     private func hide() {
         guard isShown else { return }
         isShown = false
+        videoPlayback.active = nil
+        removeVideoKeyMonitor()
         panel.orderOut(nil)
         backdrop.orderOut(nil)
         configPanel?.orderOut(nil)
@@ -784,9 +1094,18 @@ final class Controller: NSObject, NSWindowDelegate {
 
     private func handleKey(_ code: UInt16) {
         switch code {
-        case 49, 124, 36: state.next()   // space, right arrow, return
-        case 123:         state.prev()   // left arrow
-        case 53:          hide()         // escape
+        case 49, 124, 36:                            // space, right arrow, return
+            videoPlayback.active = nil
+            state.next()
+        case 123:                                    // left arrow
+            videoPlayback.active = nil
+            state.prev()
+        case 53:                                     // escape
+            if videoPlayback.active != nil {
+                videoPlayback.active = nil
+            } else {
+                hide()
+            }
         default: break
         }
     }
