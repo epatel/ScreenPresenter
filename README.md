@@ -9,6 +9,7 @@ a dimmed backdrop with no menus, toolbars, or window chrome.
 - Borderless dialog overlay, dismisses on Esc or click outside
 - Per-slide **background images** with automatic darken-for-readability overlay
 - Inline **images** and **two-column** layouts
+- **YouTube embeds** via `![alt](https://youtu.be/ID?t=20)` — shows the thumbnail, click to play full-panel
 - Syntax-highlighted **code blocks** (Highlightr, `atom-one-dark`, ~190 languages)
 - Five bundled Google Fonts (Inter, Space Grotesk, Merriweather, Playfair Display, JetBrains Mono)
 - **Shift-hover** opens a live-config panel: font family, font size, per-slide shade
@@ -57,6 +58,8 @@ settings from the previous deck.
 | Space, →, Return | Next slide |
 | ← | Previous slide |
 | Esc, click outside | Dismiss |
+| Esc (while a video is playing) | Close the video, stay on the slide |
+| Space / ← / → (while a video is playing) | Close the video and navigate |
 | Shift while hovering corner | Open with config panel |
 | ⌘Q (while config panel is focused) | Quit |
 
@@ -73,6 +76,8 @@ Regular paragraph with **bold**, *italic*, and `inline code`.
 - Bullet two
 
 ![caption](images/photo.png)
+
+![talk](https://youtu.be/ID?t=20)
 
 ---                   <- slide separator
 
@@ -100,7 +105,32 @@ Supported directives:
 | `<!-- bg: path -->` | Per-slide background image |
 | ` ```lang ` fenced block | Syntax-highlighted code |
 | `![alt](path)` | Image — path relative to the `.md` file, absolute, or `~/...` |
-| `![alt](https://youtu.be/ID?t=20)` | YouTube — shows the thumbnail; click to play inline. Accepts `youtu.be/ID`, `youtube.com/watch?v=ID`, `/shorts/ID`, with optional `t=`/`start=` |
+| `![alt](<url>)` | YouTube — URL forms listed below |
+
+### YouTube embeds
+
+Any `![alt](<url>)` whose URL points at YouTube is rendered as a 16:9
+thumbnail with a play badge. Clicking promotes the IFrame player to fill
+the whole presenter panel; Esc closes it and returns to the slide
+underneath, and Space / arrow keys close the video while navigating.
+
+Accepted URL forms:
+
+- `https://youtu.be/VIDEO_ID`
+- `https://www.youtube.com/watch?v=VIDEO_ID`
+- `https://www.youtube.com/shorts/VIDEO_ID`
+- `https://www.youtube.com/embed/VIDEO_ID`
+
+A start offset may be supplied via `?t=` or `?start=`; values are either
+seconds (`20`) or a compound of `h`/`m`/`s` (`1m30s`, `1h2m3s`).
+
+> **How it works.** YouTube's IFrame API rejects `file://` and the
+> synthetic origin that `loadHTMLString` produces, so the app spins up a
+> tiny `NWListener` on `127.0.0.1` and serves the embed page from
+> `http://127.0.0.1:<port>/`. The bundle therefore ships with
+> `NSAllowsLocalNetworking=true` in `Info.plist` — a narrow ATS
+> exception that only permits cleartext http to loopback / `.local`
+> hosts. No other http traffic is allowed.
 
 ## Config panel
 
