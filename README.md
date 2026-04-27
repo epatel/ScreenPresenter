@@ -11,6 +11,7 @@ a dimmed backdrop with no menus, toolbars, or window chrome.
 - Inline **images** and **two-column** layouts
 - **YouTube embeds** via `![alt](https://youtu.be/ID?t=20)` — shows the thumbnail, click to play full-panel
 - Syntax-highlighted **code blocks** (Highlightr, `atom-one-dark`, ~190 languages)
+- **10 bundled themes** (`## Theme` section in markdown, or `template=NAME` flag) plus per-key color/font overrides
 - Five bundled Google Fonts (Inter, Space Grotesk, Merriweather, Playfair Display, JetBrains Mono)
 - **Shift-hover** opens a live-config panel: font family, font size, per-slide shade
 - **Drop a `.md` file** onto the app in Finder to load it
@@ -134,17 +135,17 @@ seconds (`20`) or a compound of `h`/`m`/`s` (`1m30s`, `1h2m3s`).
 
 ## Themes
 
-Define a `## Theme` section at the start of your markdown to configure colors, fonts, and default backgrounds:
+Define a `## Theme` section at the start of your markdown to configure colors, font, and a default background:
 
 ````markdown
 ## Theme
 
 template: ocean
 font: Playfair Display
-primaryColor: #0078a6
 textColor: #ffffff
 accentColor: #00bfff
 backgroundColor: #05204d
+codeBackground: #001a33
 defaultBackground: images/bg.jpg
 
 ---
@@ -156,51 +157,54 @@ Theme properties (`key: value`):
 
 | Property | Effect | Default |
 |---|---|---|
-| `template` | Bundled theme name or `demo` (see all themes as slides) | `dark` |
-| `font` | Font name (bundled or system) | `Inter` |
-| `primaryColor` | Primary accent color (hex) | varies by template |
-| `textColor` | Text color (hex) | varies by template |
-| `accentColor` | Highlight color (hex) | varies by template |
-| `backgroundColor` | Default slide background (hex) | varies by template |
+| `template` | Bundled theme name (or `demo` to browse all) | `dark` |
+| `font` | Font name (bundled or system) | template's |
+| `textColor` | Text color (hex `#rrggbb`) | template's |
+| `accentColor` | Highlight color (hex) | template's |
+| `backgroundColor` | Slide background fill (hex) | template's |
+| `codeBackground` | Code block background (hex) | template's |
 | `defaultBackground` | Path to default background image | none |
+
+Any property left out inherits from the named `template`. Hex colors override the template's individual swatches.
 
 ### Bundled templates (10)
 
-- **dark** (Inter) — minimal dark with yellow accent
-- **ocean** (Playfair Display) — cool blues and cyan
-- **sunset** (Merriweather) — warm oranges and pinks
-- **forest** (Space Grotesk) — deep greens and lime
-- **minimal** (JetBrains Mono) — high contrast black and white
-- **neon** (Space Grotesk) — cyberpunk cyan and magenta on black
-- **warm** (Georgia) — earthy browns and golds
-- **cool** (Inter) — purples and cool grays
-- **candy** (Space Grotesk) — playful pastels
-- **ink** (Merriweather) — navy and cream, print-like
+| Template | Font | Vibe |
+|---|---|---|
+| `dark` | Inter | Minimal dark with yellow accent |
+| `ocean` | Playfair Display | Cool blues and cyan |
+| `sunset` | Merriweather | Warm oranges and pinks |
+| `forest` | Space Grotesk | Deep greens and lime |
+| `minimal` | JetBrains Mono | High contrast black and white |
+| `neon` | Space Grotesk | Cyberpunk cyan and magenta on black |
+| `warm` | Georgia | Earthy browns and golds |
+| `cool` | Inter | Purples and cool grays |
+| `candy` | Space Grotesk | Playful pastels |
+| `ink` | Merriweather | Navy and cream, print-like |
 
-### Using templates
+### Applying a template
 
-Three ways to apply a theme:
-
-```bash
-# 1. Inline in markdown
-## Theme
+```sh
+# 1. Inline in markdown (## Theme section)
 template: ocean
 
-# 2. CLI argument (dev build)
+# 2. CLI flag — overrides the inline choice for this run
 swift run ScreenPresenter deck.md template=sunset
-
-# 3. Via open command (installed .app)
 open -a ~/Applications/ScreenPresenter.app deck.md template=cool
 ```
 
-Use `template: demo` to see all bundled themes as slides — navigate through them to pick your favorite.
+The CLI flag only affects the deck it's launched with; subsequent file drops use whatever each dropped file declares.
+
+### Demo mode
+
+Set `template: demo` (or pass `template=demo`) to **replace** the deck with one preview slide per bundled template. Each preview shows that template's colors, font, and a sample code block — useful for picking a theme before committing.
 
 ## Config panel
 
 Hover the top-right corner **while holding Shift** to open a second panel
 below the presenter with live controls:
 
-- **Font** — 10 bundled Google Fonts + System + common installed fonts
+- **Font** — 5 bundled Google Fonts + System + common installed fonts (overrides the theme's font for this session)
 - **Size** — 14–40pt (scales headings proportionally; code blocks render at 0.75×)
 - **Shade** — 0.0–1.0, applied per slide and persisted for the session
 
@@ -269,7 +273,7 @@ make bump-major    # 0.1.0 -> 1.0.0
 ```
 Package.swift               SwiftPM executable + Fonts as resources
 Sources/ScreenPresenter/
-  main.swift                entire app (~800 lines)
+  main.swift                entire app
   Fonts/                    bundled Google Fonts (.ttf, variable)
 Resources/
   Info.plist.template       placeholders substituted by make app
@@ -278,6 +282,7 @@ Makefile                    build/sign/notarize/dmg pipeline
 VERSION                     semver, read by Makefile and Info.plist
 icon.png                    1024×1024 source; make icon -> .icns
 sample.md                   default deck demonstrating syntax
+theme-demo.md               example with a `## Theme` section
 images/                     assets referenced by sample.md
 .env.example                signing/notary credentials template
 ```
