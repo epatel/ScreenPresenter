@@ -132,12 +132,75 @@ seconds (`20`) or a compound of `h`/`m`/`s` (`1m30s`, `1h2m3s`).
 > exception that only permits cleartext http to loopback / `.local`
 > hosts. No other http traffic is allowed.
 
+## Themes
+
+Define a `## Theme` section at the start of your markdown to configure colors, fonts, and default backgrounds:
+
+````markdown
+## Theme
+
+template: ocean
+font: Playfair Display
+primaryColor: #0078a6
+textColor: #ffffff
+accentColor: #00bfff
+backgroundColor: #05204d
+defaultBackground: images/bg.jpg
+
+---
+
+# Your first slide
+````
+
+Theme properties (`key: value`):
+
+| Property | Effect | Default |
+|---|---|---|
+| `template` | Bundled theme name or `demo` (see all themes as slides) | `dark` |
+| `font` | Font name (bundled or system) | `Inter` |
+| `primaryColor` | Primary accent color (hex) | varies by template |
+| `textColor` | Text color (hex) | varies by template |
+| `accentColor` | Highlight color (hex) | varies by template |
+| `backgroundColor` | Default slide background (hex) | varies by template |
+| `defaultBackground` | Path to default background image | none |
+
+### Bundled templates (10)
+
+- **dark** (Inter) — minimal dark with yellow accent
+- **ocean** (Playfair Display) — cool blues and cyan
+- **sunset** (Merriweather) — warm oranges and pinks
+- **forest** (Space Grotesk) — deep greens and lime
+- **minimal** (JetBrains Mono) — high contrast black and white
+- **neon** (Space Grotesk) — cyberpunk cyan and magenta on black
+- **warm** (Georgia) — earthy browns and golds
+- **cool** (Inter) — purples and cool grays
+- **candy** (Space Grotesk) — playful pastels
+- **ink** (Merriweather) — navy and cream, print-like
+
+### Using templates
+
+Three ways to apply a theme:
+
+```bash
+# 1. Inline in markdown
+## Theme
+template: ocean
+
+# 2. CLI argument (dev build)
+swift run ScreenPresenter deck.md template=sunset
+
+# 3. Via open command (installed .app)
+open -a ~/Applications/ScreenPresenter.app deck.md template=cool
+```
+
+Use `template: demo` to see all bundled themes as slides — navigate through them to pick your favorite.
+
 ## Config panel
 
 Hover the top-right corner **while holding Shift** to open a second panel
 below the presenter with live controls:
 
-- **Font** — 5 bundled Google Fonts + System + common installed fonts
+- **Font** — 10 bundled Google Fonts + System + common installed fonts
 - **Size** — 14–40pt (scales headings proportionally; code blocks render at 0.75×)
 - **Shade** — 0.0–1.0, applied per slide and persisted for the session
 

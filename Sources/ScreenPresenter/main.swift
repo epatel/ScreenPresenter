@@ -26,11 +26,129 @@ enum FontLoader {
     }
 }
 
+// MARK: - Theme system
+
+struct DeckTheme {
+    let textColor: Color
+    let accentColor: Color
+    let backgroundColor: Color
+    let codeBackground: Color
+    let fontName: String
+    let defaultBackground: String?
+    let templateName: String
+
+    private static func rgb(_ r: Double, _ g: Double, _ b: Double, _ a: Double = 1.0) -> Color {
+        Color(nsColor: NSColor(calibratedRed: r, green: g, blue: b, alpha: a))
+    }
+
+    private static func gray(_ w: Double, _ a: Double = 1.0) -> Color {
+        Color(nsColor: NSColor(calibratedWhite: w, alpha: a))
+    }
+
+    static let bundled: [String: DeckTheme] = [
+        "dark": DeckTheme(
+            textColor: .white,
+            accentColor: rgb(0.95, 0.75, 0.16),
+            backgroundColor: gray(0.10),
+            codeBackground: gray(0.0, 0.55),
+            fontName: "Inter",
+            defaultBackground: nil,
+            templateName: "dark"
+        ),
+        "ocean": DeckTheme(
+            textColor: .white,
+            accentColor: rgb(0.12, 0.94, 0.99),
+            backgroundColor: rgb(0.05, 0.25, 0.40),
+            codeBackground: rgb(0.0, 0.35, 0.50, 0.6),
+            fontName: "Playfair Display",
+            defaultBackground: nil,
+            templateName: "ocean"
+        ),
+        "sunset": DeckTheme(
+            textColor: .white,
+            accentColor: rgb(1.0, 0.85, 0.35),
+            backgroundColor: rgb(0.25, 0.12, 0.10),
+            codeBackground: rgb(0.40, 0.20, 0.15, 0.6),
+            fontName: "Merriweather",
+            defaultBackground: nil,
+            templateName: "sunset"
+        ),
+        "forest": DeckTheme(
+            textColor: .white,
+            accentColor: rgb(0.70, 0.95, 0.35),
+            backgroundColor: rgb(0.08, 0.20, 0.12),
+            codeBackground: rgb(0.15, 0.35, 0.20, 0.6),
+            fontName: "Space Grotesk",
+            defaultBackground: nil,
+            templateName: "forest"
+        ),
+        "minimal": DeckTheme(
+            textColor: .black,
+            accentColor: .black,
+            backgroundColor: .white,
+            codeBackground: gray(0.15),
+            fontName: "JetBrains Mono",
+            defaultBackground: nil,
+            templateName: "minimal"
+        ),
+        "neon": DeckTheme(
+            textColor: rgb(0.0, 1.0, 0.99),
+            accentColor: rgb(1.0, 0.0, 0.75),
+            backgroundColor: rgb(0.08, 0.08, 0.12),
+            codeBackground: rgb(0.0, 0.20, 0.25, 0.7),
+            fontName: "Space Grotesk",
+            defaultBackground: nil,
+            templateName: "neon"
+        ),
+        "warm": DeckTheme(
+            textColor: rgb(0.98, 0.95, 0.90),
+            accentColor: rgb(1.0, 0.75, 0.35),
+            backgroundColor: rgb(0.20, 0.15, 0.10),
+            codeBackground: rgb(0.35, 0.28, 0.20, 0.6),
+            fontName: "Georgia",
+            defaultBackground: nil,
+            templateName: "warm"
+        ),
+        "cool": DeckTheme(
+            textColor: .white,
+            accentColor: rgb(0.70, 0.85, 1.0),
+            backgroundColor: rgb(0.12, 0.12, 0.18),
+            codeBackground: rgb(0.25, 0.18, 0.40, 0.6),
+            fontName: "Inter",
+            defaultBackground: nil,
+            templateName: "cool"
+        ),
+        "candy": DeckTheme(
+            textColor: rgb(0.30, 0.25, 0.35),
+            accentColor: rgb(0.99, 0.50, 0.75),
+            backgroundColor: rgb(0.98, 0.92, 0.95),
+            codeBackground: rgb(0.25, 0.18, 0.25),
+            fontName: "Space Grotesk",
+            defaultBackground: nil,
+            templateName: "candy"
+        ),
+        "ink": DeckTheme(
+            textColor: rgb(0.98, 0.96, 0.92),
+            accentColor: rgb(0.95, 0.70, 0.20),
+            backgroundColor: rgb(0.12, 0.16, 0.40),
+            codeBackground: rgb(0.18, 0.22, 0.45, 0.6),
+            fontName: "Merriweather",
+            defaultBackground: nil,
+            templateName: "ink"
+        ),
+    ]
+
+    static func `default`() -> DeckTheme {
+        bundled["dark"]!
+    }
+}
+
 // MARK: - Slide model
 
 struct Slide {
     let background: String?
     let columns: [String]
+    let themeOverride: DeckTheme?
 
     static func parse(_ raw: String) -> Slide {
         var bg: String?
@@ -52,15 +170,16 @@ struct Slide {
         let cols = body.components(separatedBy: "\n|||\n").map {
             $0.trimmingCharacters(in: .whitespacesAndNewlines)
         }
-        return Slide(background: bg, columns: cols)
+        return Slide(background: bg, columns: cols, themeOverride: nil)
     }
 }
 
 struct Deck {
     let baseDir: URL
     let slides: [Slide]
+    let theme: DeckTheme
 
-    static func load(from path: String) -> Deck {
+    static func load(from path: String, templateOverride: String? = nil) -> Deck {
         var isDir: ObjCBool = false
         if FileManager.default.fileExists(atPath: path, isDirectory: &isDir), isDir.boolValue {
             return loadFolder(URL(fileURLWithPath: path))
@@ -81,8 +200,142 @@ struct Deck {
         - **Esc** — dismiss
         """
         let content = (try? String(contentsOfFile: path, encoding: .utf8)) ?? fallback
-        let slides = content.components(separatedBy: "\n---\n").map { Slide.parse($0) }
-        return Deck(baseDir: baseDir, slides: slides)
+        let rawSlides = content.components(separatedBy: "\n---\n")
+
+        var theme = DeckTheme.default()
+        var filteredSlides: [Slide] = []
+        var inlineTemplate: String?
+
+        if !rawSlides.isEmpty {
+            if let (parsedTheme, themeContent) = parseTheme(rawSlides[0]) {
+                theme = parsedTheme
+                inlineTemplate = parsedTheme.templateName
+                let remaining = Array(rawSlides.dropFirst()).map { Slide.parse($0) }
+                filteredSlides = themeContent.isEmpty
+                    ? remaining
+                    : [Slide.parse(themeContent)] + remaining
+            } else {
+                filteredSlides = rawSlides.map { Slide.parse($0) }
+            }
+        }
+
+        // CLI override wins over inline template.
+        if let override = templateOverride, let overrideTheme = DeckTheme.bundled[override] {
+            theme = overrideTheme
+        }
+
+        // Demo mode if either CLI or inline template is "demo". Demo slides
+        // replace the deck — point of demo is browsing themes, not appending
+        // 10 previews after the user's content.
+        let effectiveTemplate = templateOverride ?? inlineTemplate
+        if effectiveTemplate == "demo" {
+            return Deck(baseDir: baseDir, slides: generateThemeDemo(), theme: theme)
+        }
+
+        return Deck(baseDir: baseDir, slides: filteredSlides, theme: theme)
+    }
+
+    private static func parseTheme(_ firstSlide: String) -> (DeckTheme, String)? {
+        let lines = firstSlide.components(separatedBy: "\n")
+        var inTheme = false
+        var themeFound = false
+        var themeLines: [String] = []
+        var contentLines: [String] = []
+
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed == "## Theme" || trimmed == "# Theme" {
+                inTheme = true
+                themeFound = true
+                continue
+            }
+            // A new heading ends the Theme section.
+            if inTheme && (trimmed.hasPrefix("# ") || trimmed.hasPrefix("## ") || trimmed.hasPrefix("### ")) {
+                inTheme = false
+            }
+            if inTheme {
+                if !trimmed.isEmpty { themeLines.append(line) }
+            } else {
+                contentLines.append(line)
+            }
+        }
+
+        guard themeFound && !themeLines.isEmpty else { return nil }
+
+        var config: [String: String] = [:]
+        for line in themeLines {
+            guard let colon = line.firstIndex(of: ":") else { continue }
+            let key = line[..<colon].trimmingCharacters(in: .whitespaces)
+            let value = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+            if !key.isEmpty { config[key] = value }
+        }
+
+        let templateName = config["template"] ?? "dark"
+        let base = DeckTheme.bundled[templateName] ?? DeckTheme.default()
+        let theme = DeckTheme(
+            textColor: config["textColor"].flatMap(colorFromHex) ?? base.textColor,
+            accentColor: config["accentColor"].flatMap(colorFromHex) ?? base.accentColor,
+            backgroundColor: config["backgroundColor"].flatMap(colorFromHex) ?? base.backgroundColor,
+            codeBackground: config["codeBackground"].flatMap(colorFromHex) ?? base.codeBackground,
+            fontName: config["font"] ?? base.fontName,
+            defaultBackground: config["defaultBackground"] ?? base.defaultBackground,
+            templateName: templateName
+        )
+
+        let contentStr = contentLines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        return (theme, contentStr)
+    }
+
+    private static func colorFromHex(_ hex: String) -> Color? {
+        let hex = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
+        guard hex.count == 6 else { return nil }
+        let scanner = Scanner(string: hex)
+        var rgb: UInt64 = 0
+        guard scanner.scanHexInt64(&rgb) else { return nil }
+        let r = CGFloat((rgb >> 16) & 0xFF) / 255.0
+        let g = CGFloat((rgb >> 8) & 0xFF) / 255.0
+        let b = CGFloat(rgb & 0xFF) / 255.0
+        return Color(nsColor: NSColor(calibratedRed: r, green: g, blue: b, alpha: 1.0))
+    }
+
+    private static func generateThemeDemo() -> [Slide] {
+        return DeckTheme.bundled.sorted { $0.key < $1.key }.map { name, theme in
+            let left = """
+            # \(name.uppercased())
+
+            **Font:** \(theme.fontName)
+
+            ### Sample Heading
+
+            Regular paragraph with **bold** and *italic*.
+
+            - First bullet point
+            - Second bullet point
+            - Third bullet point
+
+            Try `template=\(name)`.
+            """
+            let right = """
+            ```swift
+            struct Theme {
+                let name: String
+                let font: String
+                let bg: Color
+                let fg: Color
+            }
+
+            let \(name) = Theme(
+                name: "\(name)",
+                font: "\(theme.fontName)",
+                bg: .background,
+                fg: .text
+            )
+
+            print("Active: \\(\(name).name)")
+            ```
+            """
+            return Slide(background: nil, columns: [left, right], themeOverride: theme)
+        }
     }
 
     // One slide per image file in the folder, ordered by filename (Finder-style).
@@ -104,13 +357,14 @@ struct Deck {
         if images.isEmpty {
             return Deck(
                 baseDir: url,
-                slides: [Slide(background: nil, columns: ["# No images in folder"])]
+                slides: [Slide(background: nil, columns: ["# No images in folder"], themeOverride: nil)],
+                theme: .default()
             )
         }
         let slides = images.map {
-            Slide(background: $0.lastPathComponent, columns: [""])
+            Slide(background: $0.lastPathComponent, columns: [""], themeOverride: nil)
         }
-        return Deck(baseDir: url, slides: slides)
+        return Deck(baseDir: url, slides: slides, theme: .default())
     }
 }
 
@@ -119,6 +373,7 @@ struct Deck {
 final class PresenterSettings: ObservableObject {
     @Published var fontName: String = "System"
     @Published var baseFontSize: CGFloat = 24
+    @Published var theme: DeckTheme = .default()
     @Published private var shadeByIndex: [Int: Double] = [:]
 
     static let defaultShade: Double = 0.45
@@ -147,20 +402,22 @@ final class PresenterSettings: ObservableObject {
     }
 
     func font(size: CGFloat) -> Font {
-        if fontName == "System" {
+        let name = fontName == "System" ? theme.fontName : fontName
+        if name == "System" {
             return .system(size: size)
         }
-        return .custom(fontName, size: size)
+        return .custom(name, size: size)
     }
 
     func nsFont(size: CGFloat, monospaced: Bool = false) -> NSFont {
         if monospaced {
             return NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
         }
-        if fontName == "System" {
+        let name = fontName == "System" ? theme.fontName : fontName
+        if name == "System" {
             return NSFont.systemFont(ofSize: size)
         }
-        return NSFont(name: fontName, size: size) ?? NSFont.systemFont(ofSize: size)
+        return NSFont(name: name, size: size) ?? NSFont.systemFont(ofSize: size)
     }
 }
 
@@ -242,6 +499,7 @@ struct YouTubeLink {
 struct MarkdownSlide: View {
     let text: String
     let baseDir: URL
+    let theme: DeckTheme
     @EnvironmentObject var settings: PresenterSettings
 
     var body: some View {
@@ -258,22 +516,30 @@ struct MarkdownSlide: View {
 
     private var base: CGFloat { settings.baseFontSize }
 
+    private func font(size: CGFloat) -> Font {
+        let name = settings.fontName == "System" ? theme.fontName : settings.fontName
+        if name == "System" {
+            return .system(size: size)
+        }
+        return .custom(name, size: size)
+    }
+
     @ViewBuilder
     private func render(block: Block) -> some View {
         switch block {
         case .heading(1, let s):
-            Text(inline(s)).font(settings.font(size: base * 2.33)).fontWeight(.bold)
+            Text(inline(s)).font(font(size: base * 2.33)).fontWeight(.bold)
         case .heading(2, let s):
-            Text(inline(s)).font(settings.font(size: base * 1.67)).fontWeight(.semibold)
+            Text(inline(s)).font(font(size: base * 1.67)).fontWeight(.semibold)
         case .heading(_, let s):
-            Text(inline(s)).font(settings.font(size: base * 1.25)).fontWeight(.semibold)
+            Text(inline(s)).font(font(size: base * 1.25)).fontWeight(.semibold)
         case .bullet(let s):
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text("•").font(settings.font(size: base))
-                Text(inline(s)).font(settings.font(size: base))
+                Text("•").font(font(size: base))
+                Text(inline(s)).font(font(size: base))
             }
         case .paragraph(let s):
-            Text(inline(s)).font(settings.font(size: base))
+            Text(inline(s)).font(font(size: base))
         case .blank:
             Spacer().frame(height: 8)
         case .image(_, let path):
@@ -291,7 +557,7 @@ struct MarkdownSlide: View {
         case .youtube(let vid, let start, _):
             YouTubeBlock(videoId: vid, start: start)
         case .code(let lang, let source):
-            CodeBlockView(language: lang, source: source)
+            CodeBlockView(language: lang, source: source, theme: theme)
         }
     }
 
@@ -369,6 +635,7 @@ struct MarkdownSlide: View {
 struct CodeBlockView: View {
     let language: String
     let source: String
+    let theme: DeckTheme
     @EnvironmentObject var settings: PresenterSettings
 
     static let highlightr: Highlightr = {
@@ -383,7 +650,7 @@ struct CodeBlockView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color.black.opacity(0.55))
+                    .fill(theme.codeBackground)
             )
     }
 
@@ -599,7 +866,7 @@ final class PresenterState: ObservableObject {
     func prev() { if index > 0 { index -= 1 } }
 
     var currentSlide: Slide {
-        guard !deck.slides.isEmpty else { return Slide(background: nil, columns: [""]) }
+        guard !deck.slides.isEmpty else { return Slide(background: nil, columns: [""], themeOverride: nil) }
         return deck.slides[index]
     }
 
@@ -657,6 +924,7 @@ struct PresenterContent: View {
         let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
         let bg = backgroundImage
         let shadeAmount = settings.shade(for: state.index)
+        let theme = currentTheme
         ZStack(alignment: .bottomTrailing) {
             // Background fills the whole frame. Color.clear provides the sizing;
             // the image (if any) paints behind it via .background.
@@ -666,23 +934,23 @@ struct PresenterContent: View {
                         if let img = bg {
                             Image(nsImage: img).resizable().scaledToFill()
                         } else {
-                            Color(nsColor: NSColor(calibratedWhite: 0.10, alpha: 1.0))
+                            theme.backgroundColor
                         }
                     }
                 )
                 .overlay(bg != nil ? Color.black.opacity(shadeAmount) : Color.clear)
                 .clipShape(shape)
 
-            shape.strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+            shape.strokeBorder(theme.textColor.opacity(0.35), lineWidth: 1.5)
 
             columnsView
-                .foregroundStyle(.white)
+                .foregroundStyle(theme.textColor)
                 .padding(48)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
             Text("\(state.index + 1) / \(state.deck.slides.count)")
                 .font(.system(size: 13, design: .monospaced))
-                .foregroundStyle(.white.opacity(0.6))
+                .foregroundStyle(theme.textColor.opacity(0.6))
                 .padding(16)
 
             if let p = videoPlayback.active {
@@ -701,13 +969,17 @@ struct PresenterContent: View {
         if cols.count > 1 {
             HStack(alignment: .top, spacing: 40) {
                 ForEach(Array(cols.enumerated()), id: \.offset) { _, col in
-                    MarkdownSlide(text: col, baseDir: state.baseDir)
+                    MarkdownSlide(text: col, baseDir: state.baseDir, theme: currentTheme)
                         .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
             }
         } else {
-            MarkdownSlide(text: cols.first ?? "", baseDir: state.baseDir)
+            MarkdownSlide(text: cols.first ?? "", baseDir: state.baseDir, theme: currentTheme)
         }
+    }
+
+    private var currentTheme: DeckTheme {
+        state.currentSlide.themeOverride ?? state.deck.theme
     }
 
     private var backgroundImage: NSImage? {
@@ -841,6 +1113,7 @@ final class Controller: NSObject, NSWindowDelegate {
 
     init(deck: Deck) {
         self.state = PresenterState(deck: deck)
+        self.settings.theme = deck.theme
     }
 
     func start() {
@@ -851,11 +1124,13 @@ final class Controller: NSObject, NSWindowDelegate {
 
     // Called when macOS hands us a file or folder via Finder drop / "Open With"
     // / `open -a`. A folder becomes a photo deck (one image per slide).
-    func loadDeck(from url: URL) {
-        let newDeck = Deck.load(from: url.path)
+    func loadDeck(from url: URL, templateOverride: String? = nil) {
+        let newDeck = Deck.load(from: url.path, templateOverride: templateOverride)
         state.deck = newDeck
         state.index = 0
         videoPlayback.active = nil
+        settings.theme = newDeck.theme
+        settings.fontName = "System"
         settings.resetPerSlideSettings()
         var isDir: ObjCBool = false
         if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir),
@@ -865,7 +1140,7 @@ final class Controller: NSObject, NSWindowDelegate {
             }
         }
         UserDefaults.standard.set(url.path, forKey: "lastDeckPath")
-        NSLog("ScreenPresenter: loaded deck \(url.lastPathComponent) with \(newDeck.slides.count) slides")
+        NSLog("ScreenPresenter: loaded deck \(url.lastPathComponent) with \(newDeck.slides.count) slides (theme: \(newDeck.theme.templateName))")
         // Show the presenter immediately so the user sees the result of the drop.
         if !isShown { show(withConfig: false) }
     }
@@ -1113,9 +1388,20 @@ final class Controller: NSObject, NSWindowDelegate {
 
 // MARK: - Bootstrap
 
-let args = CommandLine.arguments
+// Parse CLI args. First non-flag positional becomes the path; `template=NAME`
+// sets the initial theme override.
+var cliTemplate: String?
+var cliPath: String?
+for arg in CommandLine.arguments.dropFirst() {
+    if arg.hasPrefix("template=") {
+        cliTemplate = String(arg.dropFirst("template=".count))
+    } else if cliPath == nil && !arg.hasPrefix("-") {
+        cliPath = arg
+    }
+}
+
 let resolvedPath: String = {
-    if args.count > 1 { return args[1] }
+    if let p = cliPath { return p }
     // Remember the last file opened via drop / "Open With" / `open -a`.
     if let last = UserDefaults.standard.string(forKey: "lastDeckPath"),
        FileManager.default.fileExists(atPath: last) {
@@ -1127,7 +1413,7 @@ let resolvedPath: String = {
     }
     return "sample.md"
 }()
-let deck = Deck.load(from: resolvedPath)
+let deck = Deck.load(from: resolvedPath, templateOverride: cliTemplate)
 
 FontLoader.registerBundledFonts()
 
@@ -1141,6 +1427,7 @@ app.run()
 
 final class AppDelegateShim: NSObject, NSApplicationDelegate {
     let controller: Controller
+
     init(controller: Controller) { self.controller = controller }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -1151,6 +1438,8 @@ final class AppDelegateShim: NSObject, NSApplicationDelegate {
     // Covers both cold-launch and while-running cases.
     // Deferred to the next runloop tick because on cold launch this can fire
     // before the window server is fully ready for our floating panel.
+    // The CLI template= flag intentionally does not propagate to dropped
+    // files — those use whatever theme the dropped file declares.
     func application(_ application: NSApplication, open urls: [URL]) {
         guard let url = urls.first else { return }
         DispatchQueue.main.async { [controller] in
