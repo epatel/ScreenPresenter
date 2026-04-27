@@ -740,6 +740,49 @@ struct YouTubeWebView: NSViewRepresentable {
     func updateNSView(_ nsView: WKWebView, context: Context) {}
 }
 
+// MARK: - SVG background (rendered live in WKWebView so animations play)
+
+// Backgrounds shouldn't grab focus — refuse hit-testing so the presenter
+// panel keeps first-responder status (otherwise WKWebView swallows Esc /
+// arrow keys / space).
+final class PassiveWebView: WKWebView {
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    override var acceptsFirstResponder: Bool { false }
+}
+
+struct SVGBackgroundView: NSViewRepresentable {
+    let url: URL
+
+    final class Coordinator { var loadedURL: URL? }
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeNSView(context: Context) -> PassiveWebView {
+        let wv = PassiveWebView(frame: .zero, configuration: WKWebViewConfiguration())
+        wv.underPageBackgroundColor = .clear
+        wv.setValue(false, forKey: "drawsBackground")
+        load(into: wv, context: context)
+        return wv
+    }
+
+    func updateNSView(_ nsView: PassiveWebView, context: Context) {
+        if context.coordinator.loadedURL != url {
+            load(into: nsView, context: context)
+        }
+    }
+
+    private func load(into wv: PassiveWebView, context: Context) {
+        let svg = (try? String(contentsOf: url)) ?? ""
+        let html = """
+        <!doctype html><html><head><meta charset="utf-8"><style>
+        html,body{margin:0;padding:0;background:transparent;width:100%;height:100%;overflow:hidden}
+        svg{width:100vw;height:100vh;display:block}
+        </style></head><body>\(svg)</body></html>
+        """
+        wv.loadHTMLString(html, baseURL: url.deletingLastPathComponent())
+        context.coordinator.loadedURL = url
+    }
+}
+
 // MARK: - Tiny localhost HTTP server (serves YouTube embed pages)
 //
 // The IFrame API wants a real http(s) parent origin. We stand up one
@@ -922,23 +965,16 @@ struct PresenterContent: View {
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
-        let bg = backgroundImage
+        let bg = backgroundSource
         let shadeAmount = settings.shade(for: state.index)
         let theme = currentTheme
         ZStack(alignment: .bottomTrailing) {
             // Background fills the whole frame. Color.clear provides the sizing;
-            // the image (if any) paints behind it via .background.
+            // SVG -> live WKWebView (so animations play); image -> NSImage;
+            // otherwise the theme's background color.
             Color.clear
-                .background(
-                    Group {
-                        if let img = bg {
-                            Image(nsImage: img).resizable().scaledToFill()
-                        } else {
-                            theme.backgroundColor
-                        }
-                    }
-                )
-                .overlay(bg != nil ? Color.black.opacity(shadeAmount) : Color.clear)
+                .background(backgroundFill(bg, theme: theme))
+                .overlay(bg.hasContent ? Color.black.opacity(shadeAmount) : Color.clear)
                 .clipShape(shape)
 
             shape.strokeBorder(theme.textColor.opacity(0.35), lineWidth: 1.5)
@@ -982,13 +1018,40 @@ struct PresenterContent: View {
         state.currentSlide.themeOverride ?? state.deck.theme
     }
 
-    private var backgroundImage: NSImage? {
-        guard let path = state.currentSlide.background else { return nil }
+    private enum BackgroundSource {
+        case none
+        case image(NSImage)
+        case svg(URL)
+
+        var hasContent: Bool {
+            if case .none = self { return false }
+            return true
+        }
+    }
+
+    private var backgroundSource: BackgroundSource {
+        let path = state.currentSlide.background ?? currentTheme.defaultBackground
+        guard let path else { return .none }
         let expanded = (path as NSString).expandingTildeInPath
         let url: URL = expanded.hasPrefix("/")
             ? URL(fileURLWithPath: expanded)
             : state.baseDir.appendingPathComponent(expanded)
-        return NSImage(contentsOf: url)
+        if url.pathExtension.lowercased() == "svg" {
+            return .svg(url)
+        }
+        return NSImage(contentsOf: url).map { .image($0) } ?? .none
+    }
+
+    @ViewBuilder
+    private func backgroundFill(_ source: BackgroundSource, theme: DeckTheme) -> some View {
+        switch source {
+        case .none:
+            theme.backgroundColor
+        case .image(let img):
+            Image(nsImage: img).resizable().scaledToFill()
+        case .svg(let url):
+            SVGBackgroundView(url: url)
+        }
     }
 }
 
