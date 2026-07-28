@@ -35,7 +35,6 @@ are plain `.md` files that stay readable in any editor.
 - [x] Build/sign/notarize/dmg pipeline in the Makefile
 - [x] Agentic documentation setup: `cards/`, `.claude/skills/`, this plan
 - [ ] Document photo-folder decks in the README — currently undocumented
-- [ ] Decide whether `theme-demo.md` should be committed in its modified form
 
 ## Decisions
 
@@ -50,6 +49,11 @@ larger ones lives in the decision cards under `cards/`.
 - **2026-07-28** — Adopted this shared project plan. Currently a solo,
   single-agent repo, so its practical value is as a durable goal/state record
   rather than as multi-agent coordination.
+- **2026-07-28** — `theme-demo.md` stays a theme-browsing deck
+  (`template: demo`). It had been locally repurposed as a scratch harness for
+  the SVG background feature; those edits were discarded rather than
+  committed. If SVG backgrounds need a permanent demo, it gets its own deck
+  file instead of displacing this one.
 - **Earlier** — The whole app stays in one file (`single-file-main-swift`).
 - **Earlier** — No test target; verification is visual
   (`no-tests-visual-verification`).
@@ -61,17 +65,18 @@ larger ones lives in the decision cards under `cards/`.
 
 ## Current state / handoff
 
-Version 0.2.0, branch `main`, working tree has an uncommitted modification to
-`theme-demo.md`. The app is feature-complete for its stated goal; recent work
+Version 0.2.0, branch `main`, working tree clean and in sync with
+`origin/main`. The app is feature-complete for its stated goal; recent work
 was the theme system (10 templates, `a405100`) and SVG background support
 (`67d0c5d`).
 
 This session added the agentic documentation layer: eleven cards under
 `cards/`, ten project-scoped skills under `.claude/skills/`, this plan, and a
-card index appended to `CLAUDE.md`. No application code was touched.
+trimmed `CLAUDE.md` carrying the card index (`b718903`, pushed). It also set
+the GitHub About description and topics. No application code was touched.
 
-Next agent: nothing is mid-flight. The two unchecked milestones above are the
-open threads, both small.
+Next agent: nothing is mid-flight. The one unchecked milestone above is the
+only open thread, and it is small.
 
 ## Open questions
 
@@ -80,5 +85,3 @@ open threads, both small.
   be why it was never written up.
 - Is the faint red corner-trigger tint (`systemRed` at 0.12 alpha) meant to
   ship, or is it a development aid that should default to invisible?
-- `theme-demo.md` is modified but uncommitted — intentional work in progress,
-  or a leftover experiment?
