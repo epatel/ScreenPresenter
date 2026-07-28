@@ -1,78 +1,130 @@
 ## Theme
 
-template: demo
-font: Inter
+template: ocean
 
 ---
 
-# Welcome to Theme Demo
+# Theme Demo
 
-Hover top-right corner to show the presenter.
+Hover the top-right corner to show the presenter.
+
+This deck explains the theme system. To *browse* all ten bundled themes
+instead, run it with `template=demo`.
 
 ---
 
-## Customize Your Theme
+## Customize your theme
 
-Add a `## Theme` section at the start of your markdown:
+Add a `## Theme` section at the very start of your markdown:
 
 ```
 ## Theme
+
 template: ocean
 font: Playfair Display
-primaryColor: #0078a6
 textColor: #ffffff
+accentColor: #00bfff
 ```
 
 Available templates:
+
 - dark, ocean, sunset, forest
 - minimal, neon, warm, cool
 - candy, ink
+
+Anything you leave out inherits from the named `template`.
+
+---
+
+## Every theme key
+
+- `template` — bundled theme to start from
+- `font` — font name, bundled or installed
+- `textColor` — body and heading text
+- `accentColor` — highlights
+- `backgroundColor` — slide fill
+- `codeBackground` — code block fill
+- `defaultBackground` — image behind every slide
+
+Those seven are the *only* keys read. Anything else is ignored silently.
+
+|||
+
+```
+## Theme
+
+template: dark
+font: JetBrains Mono
+textColor: #00ff88
+accentColor: #ffcc00
+backgroundColor: #000000
+codeBackground: #101014
+```
+
+Colors are `#rrggbb`. A malformed value falls back to the template's own,
+silently — check your slide if a color seems ignored.
+
+---
+
+### Careful with codeBackground
+
+Syntax highlighting is fixed to `atom-one-dark`, which assumes a **dark**
+background.
+
+On a light template like `minimal` or `ink`, leaving `codeBackground` light
+makes highlighted code nearly unreadable. Set it to a dark color explicitly:
+
+```
+## Theme
+
+template: minimal
+codeBackground: #1b1f24
+```
 
 ---
 
 ## Use template=NAME
 
-Run with any template:
+Override the deck's own choice for a single run:
 
 ```bash
 swift run ScreenPresenter deck.md template=ocean
 open -a ScreenPresenter.app deck.md template=sunset
 ```
 
-Or embed in markdown Theme section.
+The flag beats the `## Theme` block, and it applies *only* to the deck it
+launched with — a file dropped on the running app uses whatever that file
+declares.
 
 ---
 
-## Custom Colors
+<!-- bg: images/abstract-bg.svg -->
 
-Override individual colors:
+## Default background
 
-```
-## Theme
-template: dark
-primaryColor: #ff00ff
-textColor: #00ff00
-accentColor: #ffff00
-backgroundColor: #000000
-font: JetBrains Mono
-```
-
----
-
-## Default Background
-
-Set a default background for all slides:
+Set one image behind every slide:
 
 ```
 ## Theme
+
 template: minimal
-defaultBackground: images/bg.jpg
+defaultBackground: images/abstract-bg.svg
 ```
 
-Slides can still override with `<!-- bg: path -->`.
+Individual slides still override it with `<!-- bg: path -->`.
+
+Raster or vector both work — this slide's is an SVG.
 
 ---
 
-# Try template: demo
+# Browse every theme
 
-Set `template: demo` in your Theme section to see all bundled themes as slides!
+Run with `template=demo` to replace the deck with one preview slide per
+bundled theme:
+
+```bash
+swift run ScreenPresenter theme-demo.md template=demo
+```
+
+It *replaces* the deck rather than adding to it — the point is picking a
+theme, not presenting.

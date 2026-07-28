@@ -71,8 +71,23 @@ Matching order matters — it is checked top to bottom:
 5. Empty (after trimming) → `.blank`.
 6. Anything else → `.paragraph`.
 
-Inline `**bold**`, `*italic*`, and `` `code` `` are handled at render time
-inside the heading/bullet/paragraph renderers, not by this parser.
+## Inline formatting is not parsed here
+
+Headings, bullets, and paragraphs pass their text through a private `inline`
+helper at render time:
+
+```swift
+(try? AttributedString(markdown: s)) ?? AttributedString(s)
+```
+
+That is Foundation's full CommonMark **inline** parser, so `**bold**`,
+`*italic*`, `` `code` ``, `[links](url)`, `~~strikethrough~~`, and the rest
+all work even though nothing in this file mentions them. On a parse failure it
+degrades to plain text rather than throwing.
+
+The line-prefix parser above is only about **block** structure. That is why
+the supported-syntax list looks so small: block syntax is hand-rolled and
+narrow, inline syntax is delegated and broad.
 
 ## Directive reference
 
@@ -90,8 +105,13 @@ inside the heading/bullet/paragraph renderers, not by this parser.
 
 Paths in `![alt](path)` resolve relative to the deck's `baseDir` (the
 directory containing the `.md` file). Absolute paths and `~/...` are also
-accepted. Backgrounds from `<!-- bg: ... -->` resolve the same way. A `.svg`
-background is rendered through a `WKWebView` rather than `NSImage`.
+accepted. Backgrounds from `<!-- bg: ... -->` resolve the same way.
+
+A background whose extension is `.svg` takes a different path: instead of
+being loaded as an `NSImage`, the file's contents are inlined into a minimal
+HTML document and rendered live in a `WKWebView`. This is deliberate — a
+rasterized SVG would be a still frame, whereas the live web view lets SMIL and
+CSS animations inside the SVG actually play.
 
 ## Failure behavior
 

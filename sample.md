@@ -1,4 +1,4 @@
-<!-- bg: images/jl1.jpg -->
+<!-- bg: images/boat.jpg -->
 
 # Screen Presenter
 
@@ -13,6 +13,23 @@ Move your mouse to the **top-right corner** to open.
 - **Space** or **→** — next slide
 - **←** — previous slide
 - **Esc** or click outside — dismiss
+* Hold **Shift** while hovering the corner for live settings
+
+Bullets take `-` or `*`.
+
+---
+
+## Text formatting
+
+### Headings go three levels deep
+
+`#`, `##`, and `###` — this line is an `###`.
+
+Inline styling is full markdown: **bold**, *italic*, `inline code`,
+[links](https://github.com/epatel/ScreenPresenter), and ~~strikethrough~~.
+
+- Mix them freely — ***bold italic***, or *emphasis around `code`*
+- Only block structure is limited; tables and blockquotes are not supported
 
 ---
 
@@ -42,7 +59,28 @@ Paths are relative to the `.md` file.
 
 ![GPT5.5](https://youtu.be/tNV9_I-zLO0?t=20)
 
-Click the thumbnail to play inline.
+Click the thumbnail to play full-panel. **Esc** closes the video and returns
+here; **Space** or the arrows close it and move on.
+
+|||
+
+### Any YouTube URL works
+
+- `youtu.be/ID`
+- `youtube.com/watch?v=ID`
+- `youtube.com/shorts/ID`
+- `youtube.com/embed/ID`
+
+Start offsets take `?t=` or `?start=`, as seconds (`20`) or a
+compound (`1m30s`, `1h2m3s`).
+
+---
+
+## Same video, long-form URL
+
+![GPT5.5 at 1m30s](https://www.youtube.com/watch?v=tNV9_I-zLO0&t=1m30s)
+
+A `watch?v=` link with a compound offset — starts 90 seconds in.
 
 ---
 
@@ -84,7 +122,7 @@ def fib(n):
 
 ---
 
-<!-- bg: images/jl1.jpg -->
+<!-- bg: images/boat.jpg -->
 
 # Background image
 
@@ -94,7 +132,7 @@ A dark overlay is applied automatically for readability.
 
 ---
 
-<!-- bg: images/jl1.jpg -->
+<!-- bg: images/boat.jpg -->
 
 ## Background + columns
 
@@ -103,3 +141,33 @@ Background image shows through both columns.
 |||
 
 ![tap dancer](images/Clumsy tap dancer in action.png)
+
+---
+
+<!-- bg: images/animated-bg.svg -->
+
+# SVG backgrounds
+
+This background is animated — the glows drift, the waves morph, the stars
+twinkle. Give it a few seconds.
+
+An `.svg` renders live in a web view instead of being flattened to a still
+image, so SMIL and CSS animations inside the file keep playing.
+
+Raster and vector use the same `<!-- bg: path -->` directive — the extension
+decides.
+
+---
+
+## Point it at a folder
+
+Give the app a **directory** instead of a `.md` file and it builds a photo
+deck: one slide per image, sorted the way Finder sorts them.
+
+```bash
+swift run ScreenPresenter ~/Pictures/trip
+open -a ScreenPresenter.app ~/Pictures/trip
+```
+
+Images fill the panel with no darkening overlay. Handles jpg, png, heic,
+gif, webp, tiff, and bmp.

@@ -8,6 +8,8 @@ a dimmed backdrop with no menus, toolbars, or window chrome.
 
 - Borderless dialog overlay, dismisses on Esc or click outside
 - Per-slide **background images** with automatic darken-for-readability overlay
+- **SVG backgrounds** render live, so animated SVGs keep animating
+- **Photo decks** — point the app at a folder and get one slide per image
 - Inline **images** and **two-column** layouts
 - **YouTube embeds** via `![alt](https://youtu.be/ID?t=20)` — shows the thumbnail, click to play full-panel
 - Syntax-highlighted **code blocks** (Highlightr, `atom-one-dark`, ~190 languages)
@@ -46,6 +48,26 @@ open -a ~/Applications/ScreenPresenter.app deck.md
 
 A dropped file resets the slide index to 0 and clears any per-slide shade
 settings from the previous deck.
+
+### Photo decks
+
+Any of those three routes also accepts a **folder** instead of a `.md` file:
+
+```sh
+swift run ScreenPresenter ~/Pictures/trip
+open -a ~/Applications/ScreenPresenter.app ~/Pictures/trip
+```
+
+Every image directly inside the folder becomes one slide, ordered the way
+Finder orders them (so `img2.png` precedes `img10.png`). Recognized
+extensions are `jpg`, `jpeg`, `png`, `heic`, `heif`, `gif`, `webp`, `tiff`,
+`tif`, and `bmp`; subdirectories and other files are skipped, and a folder
+with no images shows a single "No images in folder" slide.
+
+Each image is used as the slide background so it fills the panel, and the
+darken-for-readability overlay is switched off — there is no text to keep
+legible. Photo decks always use the default theme; a folder has nowhere to
+declare one.
 
 > **Note:** while the presenter is visible, the app temporarily elevates from
 > `LSUIElement` (no dock icon) to a regular app so the window server actually
@@ -103,10 +125,29 @@ Supported directives:
 |---|---|
 | `---` on its own line | New slide |
 | <code>\|\|\|</code> on its own line | Split slide into two columns |
-| `<!-- bg: path -->` | Per-slide background image |
+| `<!-- bg: path -->` | Per-slide background image (raster or `.svg`) |
 | ` ```lang ` fenced block | Syntax-highlighted code |
 | `![alt](path)` | Image — path relative to the `.md` file, absolute, or `~/...` |
 | `![alt](<url>)` | YouTube — URL forms listed below |
+
+### Block vs. inline syntax
+
+Block structure is deliberately narrow — headings (`#`, `##`, `###`), bullets
+(`-` or `*`), paragraphs, fenced code, images, and the directives above.
+Tables, blockquotes, numbered lists, and nested bullets are **not** supported
+and render as literal text.
+
+Inline styling inside those blocks is full markdown, so `**bold**`,
+`*italic*`, `` `code` ``, `[links](url)`, and `~~strikethrough~~` all work.
+
+### SVG backgrounds
+
+`<!-- bg: ... -->` accepts an `.svg` path as well as a raster image. SVGs take
+a different route: rather than being rasterized into a still frame, the file
+is inlined into a minimal HTML document and rendered live in a `WKWebView`, so
+SMIL and CSS animations inside the SVG keep playing behind the slide.
+
+The same applies to a `defaultBackground` in the theme block.
 
 ### YouTube embeds
 

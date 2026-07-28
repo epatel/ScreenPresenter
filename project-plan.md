@@ -34,7 +34,8 @@ are plain `.md` files that stay readable in any editor.
 - [x] Photo-folder decks (point at a directory of images)
 - [x] Build/sign/notarize/dmg pipeline in the Makefile
 - [x] Agentic documentation setup: `cards/`, `.claude/skills/`, this plan
-- [ ] Document photo-folder decks in the README — currently undocumented
+- [x] Document photo-folder decks in the README
+- [x] Audit both sample decks against the feature list and close the gaps
 
 ## Decisions
 
@@ -54,6 +55,21 @@ larger ones lives in the decision cards under `cards/`.
   the SVG background feature; those edits were discarded rather than
   committed. If SVG backgrounds need a permanent demo, it gets its own deck
   file instead of displacing this one.
+- **2026-07-28** — Photo-folder decks are a supported, documented feature
+  rather than an undocumented convenience; the README now covers them.
+- **2026-07-28** — **Supersedes the `theme-demo.md` entry above.** The deck now
+  presents its own slides (`template: ocean`) rather than declaring
+  `template: demo`. A feature audit found that under demo mode its authored
+  slides were replaced by the generated previews and had therefore never
+  rendered — so its written guidance, including a `primaryColor` key that does
+  not exist, was unreachable and unreviewed. Browsing themes is now a run-time
+  flag (`template=demo`), which the deck explains on its last slide.
+- **2026-07-28** — `images/abstract-bg.svg` stays static; animation lives in a
+  separate `images/animated-bg.svg`, per the earlier decision that an SVG demo
+  gets its own file. This makes the "SVG renders live" claim in `sample.md`
+  demonstrated rather than asserted.
+- **2026-07-28** — `images/jl1.jpg` was deleted and replaced by
+  `images/boat.jpg` as the sample deck's background photo.
 - **Earlier** — The whole app stays in one file (`single-file-main-swift`).
 - **Earlier** — No test target; verification is visual
   (`no-tests-visual-verification`).
@@ -73,15 +89,25 @@ was the theme system (10 templates, `a405100`) and SVG background support
 This session added the agentic documentation layer: eleven cards under
 `cards/`, ten project-scoped skills under `.claude/skills/`, this plan, and a
 trimmed `CLAUDE.md` carrying the card index (`b718903`, pushed). It also set
-the GitHub About description and topics. No application code was touched.
+the GitHub About description and topics.
 
-Next agent: nothing is mid-flight. The one unchecked milestone above is the
-only open thread, and it is small.
+It then audited both sample decks against the full feature list and closed the
+gaps: `theme-demo.md` rewritten so its slides actually render, `sample.md`
+grown from 8 to 13 slides (text formatting, more YouTube URL forms, SVG
+backgrounds, photo decks), README sections for photo decks / SVG backgrounds /
+block-vs-inline syntax, and a new animated `images/animated-bg.svg`.
+
+No application code was touched in any of it.
+
+**Unverified:** none of the deck or asset changes have been checked in the
+running app. The animated SVG in particular is unconfirmed — WKWebView is
+expected to play SMIL, but nobody has watched it. Verify before trusting
+`sample.md` as a demo deck.
+
+Next agent: nothing is mid-flight. The milestone list is clear; the two open
+questions below are the only threads.
 
 ## Open questions
 
-- Should photo-folder decks be a documented feature or stay an undocumented
-  convenience? It has no theme support and no way to add captions, which may
-  be why it was never written up.
 - Is the faint red corner-trigger tint (`systemRed` at 0.12 alpha) meant to
   ship, or is it a development aid that should default to invisible?
