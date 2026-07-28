@@ -51,6 +51,7 @@ help:
 	@echo "  zip         zip the signed bundle for notarization"
 	@echo "  notarize    submit to Apple notary service (waits)"
 	@echo "  staple      staple the notarization ticket"
+	@echo "  dist-zip    re-zip after stapling (use this for distribution)"
 	@echo "  dmg         build a distribution .dmg"
 	@echo "  open        open the built .app"
 	@echo "  register    refresh Launch Services for the built .app"
@@ -147,7 +148,9 @@ notarize: zip
 	@if [ -z "$(APPLE_ID)" ] || [ -z "$(TEAM_ID)" ] || [ -z "$(APP_PASSWORD)" ]; then \
 		echo "error: APPLE_ID, TEAM_ID, APP_PASSWORD must be set"; exit 1; \
 	fi
-	xcrun notarytool submit $(ZIP) \
+	@# Silenced: make would otherwise echo the recipe, printing APP_PASSWORD
+	@# in cleartext to the terminal and into any captured build log.
+	@xcrun notarytool submit $(ZIP) \
 		--apple-id "$(APPLE_ID)" \
 		--team-id "$(TEAM_ID)" \
 		--password "$(APP_PASSWORD)" \
@@ -156,6 +159,14 @@ notarize: zip
 staple:
 	xcrun stapler staple $(APP_BUNDLE)
 	xcrun stapler validate $(APP_BUNDLE)
+
+# The zip built for notarization predates stapling, so it holds an unstapled
+# app — Gatekeeper would have to reach Apple to clear it, and offline machines
+# would block it. Rebuild the zip after stapling for anything you distribute.
+dist-zip: staple
+	rm -f $(ZIP)
+	ditto -c -k --keepParent $(APP_BUNDLE) $(ZIP)
+	@echo "Wrote stapled $(ZIP)"
 
 # ---------- DMG ----------
 
