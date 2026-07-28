@@ -45,8 +45,9 @@ Anything you leave out inherits from the named `template`.
 - `backgroundColor` — slide fill
 - `codeBackground` — code block fill
 - `defaultBackground` — image behind every slide
+- `defaultGradient` — gradient overlay on every slide
 
-Those seven are the *only* keys read. Anything else is ignored silently.
+Those eight are the *only* keys read. Anything else is ignored silently.
 
 |||
 
@@ -114,6 +115,26 @@ defaultBackground: images/abstract-bg.svg
 Individual slides still override it with `<!-- bg: path -->`.
 
 Raster or vector both work — this slide's is an SVG.
+
+---
+
+<!-- gradient: angle=180 from=0.0 to=0.75 start=#0f1733@0.9 end=#3a1d52@0.35 -->
+
+## Default gradient
+
+`defaultGradient` puts a gradient on every slide, with the same keys the
+per-slide directive takes:
+
+```
+## Theme
+
+template: ink
+defaultGradient: angle=0 from=0.2 to=1 start=#000000@0.0 end=#000000@0.7
+```
+
+A slide's own `<!-- gradient: ... -->` overrides it. A gradient replaces the
+automatic darken overlay rather than stacking with it, so the Shade slider
+has no effect on these slides.
 
 ---
 

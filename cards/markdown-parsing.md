@@ -34,10 +34,25 @@ block.
 
 ### Stage 2 — one slide
 
-`Slide.parse` scans lines for HTML comments and extracts `bg:` directives,
-producing `background: String?`. Remaining lines are joined, trimmed, and
-split on the exact string `"\n|||\n"` into `columns`. One column is the normal
-case; two produce a side-by-side layout.
+`Slide.parse` scans lines for HTML comments and extracts two directives —
+`bg:` into `background: String?` and `gradient:` into
+`gradient: SlideGradient?`. Remaining lines are joined, trimmed, and split on
+the exact string `"\n|||\n"` into `columns`. One column is the normal case;
+two produce a side-by-side layout.
+
+Directive rules, all of which matter:
+
+- Only a line whose **trimmed form starts with** `<!--` is considered. This is
+  what keeps `` `<!-- bg: path -->` `` quoted mid-sentence in prose inert —
+  and the sample decks rely on it.
+- A comment may **span multiple lines**. If the opening line does not end with
+  `-->`, subsequent lines accumulate until one does. Gradient specs are long
+  enough to want wrapping.
+- An **unterminated** comment is appended to the body verbatim rather than
+  swallowing the rest of the slide.
+- A comment that is neither `bg:` nor `gradient:` is left in the body, where
+  it renders as a literal paragraph. That is pre-existing behavior — there is
+  no comment syntax that hides text.
 
 ### Stage 3 — blocks
 
@@ -96,6 +111,7 @@ narrow, inline syntax is delegated and broad.
 | `---` alone on a line | New slide |
 | `\|\|\|` alone on a line | Split the slide into two columns |
 | `<!-- bg: path -->` | Per-slide background image |
+| `<!-- gradient: k=v ... -->` | Per-slide gradient overlay |
 | ` ```lang ` fence | Syntax-highlighted code block |
 | `![alt](path)` | Image, alone on its line |
 | `![alt](youtube-url)` | YouTube embed, alone on its line |

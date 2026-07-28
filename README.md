@@ -8,6 +8,8 @@ a dimmed backdrop with no menus, toolbars, or window chrome.
 
 - Borderless dialog overlay, dismisses on Esc or click outside
 - Per-slide **background images** with automatic darken-for-readability overlay
+- **Gradient overlays** — angle, fade range, and two colours with alpha; over an
+  image or as the background itself
 - **SVG backgrounds** render live, so animated SVGs keep animating
 - **Photo decks** — point the app at a folder and get one slide per image
 - Inline **images** and **two-column** layouts
@@ -126,6 +128,7 @@ Supported directives:
 | `---` on its own line | New slide |
 | <code>\|\|\|</code> on its own line | Split slide into two columns |
 | `<!-- bg: path -->` | Per-slide background image (raster or `.svg`) |
+| `<!-- gradient: ... -->` | Per-slide gradient overlay (see below) |
 | ` ```lang ` fenced block | Syntax-highlighted code |
 | `![alt](path)` | Image — path relative to the `.md` file, absolute, or `~/...` |
 | `![alt](<url>)` | YouTube — URL forms listed below |
@@ -139,6 +142,41 @@ and render as literal text.
 
 Inline styling inside those blocks is full markdown, so `**bold**`,
 `*italic*`, `` `code` ``, `[links](url)`, and `~~strikethrough~~` all work.
+
+### Gradients
+
+A gradient draws above the slide background — over a background image, or
+straight over the theme's fill colour when there is no image. It is written
+as space-separated `key=value` pairs, and may wrap across lines:
+
+```markdown
+<!-- bg: images/boat.jpg -->
+<!-- gradient: angle=0 from=0 to=0.6 start=#000000@0.85 end=#000000@0.0 -->
+```
+
+| Key | Meaning | Default |
+|---|---|---|
+| `angle` | Degrees. `0` is top→bottom, increasing clockwise — `90` is left→right, `180` bottom→top, `270` right→left | `0` |
+| `from` | Normalized position (`0`–`1`) where the fade begins | `0` |
+| `to` | Normalized position where the fade completes | `1` |
+| `start` | Colour before `from`, as `#rrggbb` or `#rrggbb@alpha` | transparent |
+| `end` | Colour after `to` | black at 0.6 |
+
+The start colour is held flat from `0` to `from`, interpolates to the end
+colour between `from` and `to`, then holds flat through to `1` — so the
+example above is solid black across the top of the slide, fully clear by 60%
+down, and untouched below that.
+
+Omitted keys take their defaults, and unknown keys are ignored. `from` and
+`to` are clamped into `0`–`1`, and are swapped if given out of order.
+
+> **A gradient replaces the automatic darken overlay** rather than stacking
+> with it — it *is* the readability treatment, and applying both muddies the
+> image. The config panel's Shade slider therefore has no effect on a slide
+> with a gradient.
+
+Set `defaultGradient` in the theme block to apply one to every slide; a
+slide's own `<!-- gradient: ... -->` overrides it.
 
 ### SVG backgrounds
 
@@ -205,6 +243,7 @@ Theme properties (`key: value`):
 | `backgroundColor` | Slide background fill (hex) | template's |
 | `codeBackground` | Code block background (hex) | template's |
 | `defaultBackground` | Path to default background image | none |
+| `defaultGradient` | Gradient overlay for every slide (same keys as the directive) | none |
 
 Any property left out inherits from the named `template`. Hex colors override the template's individual swatches.
 

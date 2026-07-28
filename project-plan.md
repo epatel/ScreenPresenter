@@ -36,6 +36,7 @@ are plain `.md` files that stay readable in any editor.
 - [x] Agentic documentation setup: `cards/`, `.claude/skills/`, this plan
 - [x] Document photo-folder decks in the README
 - [x] Audit both sample decks against the feature list and close the gaps
+- [x] Gradient overlays — per-slide directive plus a `defaultGradient` theme key
 
 ## Decisions
 
@@ -70,6 +71,19 @@ larger ones lives in the decision cards under `cards/`.
   demonstrated rather than asserted.
 - **2026-07-28** — `images/jl1.jpg` was deleted and replaced by
   `images/boat.jpg` as the sample deck's background photo.
+- **2026-07-29** — Gradient overlays added. Four choices worth not reopening:
+  a gradient **replaces** the flat darken overlay rather than stacking with it
+  (stacking double-darkens, and the Shade slider is inert on those slides); it
+  applies **with or without** a background image, so a gradient can be the
+  background; the angle convention is **CSS's** (`0` top-to-bottom, clockwise)
+  rather than trigonometric; and the spec uses **named `key=value` pairs**
+  rather than positional CSS-like syntax, so omitted keys take defaults and
+  order does not matter.
+- **2026-07-29** — `Slide.parse` now accepts multi-line HTML comments, so a
+  five-key gradient can wrap. Only a line whose trimmed form *starts* with
+  `<!--` opens a directive — the sample decks quote `<!-- bg: path -->` inside
+  prose and rely on staying inert — and an unterminated comment is restored to
+  the body rather than swallowing the rest of the slide.
 - **Earlier** — The whole app stays in one file (`single-file-main-swift`).
 - **Earlier** — No test target; verification is visual
   (`no-tests-visual-verification`).
@@ -97,12 +111,19 @@ grown from 8 to 13 slides (text formatting, more YouTube URL forms, SVG
 backgrounds, photo decks), README sections for photo decks / SVG backgrounds /
 block-vs-inline syntax, and a new animated `images/animated-bg.svg`.
 
-No application code was touched in any of it.
+It then added gradient overlays — the session's only application-code change,
+touching `SlideGradient` (new), `DeckTheme`, `Slide.parse`, and
+`PresenterContent.backgroundOverlay`.
 
-**Unverified:** none of the deck or asset changes have been checked in the
-running app. The animated SVG in particular is unconfirmed — WKWebView is
-expected to play SMIL, but nobody has watched it. Verify before trusting
-`sample.md` as a demo deck.
+**Unverified — start here.** Nothing from this session has been seen in the
+running app. `swift build` is clean, but that catches little of what matters
+in this codebase. Two items specifically:
+
+- **Gradient rendering.** The angle convention has only been confirmed
+  analytically (`0` should run top-to-bottom, `90` left-to-right). Check the
+  two new gradient slides in `sample.md`.
+- **The animated SVG.** WKWebView is expected to play SMIL, but nobody has
+  watched `images/animated-bg.svg` move.
 
 Next agent: nothing is mid-flight. The milestone list is clear; the two open
 questions below are the only threads.

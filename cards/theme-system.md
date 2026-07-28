@@ -19,8 +19,13 @@ struct DeckTheme {
     let fontName: String
     let defaultBackground: String?
     let templateName: String
+    var defaultGradient: SlideGradient? = nil
 }
 ```
+
+`defaultGradient` is the one `var`, and it carries a default so the ten
+bundled entries need no gradient argument. Declare any future optional
+addition the same way rather than editing all ten.
 
 `DeckTheme.bundled` is a `[String: DeckTheme]` of 10 templates. Palette
 entries are built with the private helpers `rgb(r, g, b, a = 1)` and
@@ -53,7 +58,8 @@ sentinel that swaps the deck for one preview slide per bundled template.
 2. Lines are parsed as `key: value`. `template` selects the base theme
    (unknown names fall back to `DeckTheme.default()`); `textColor`,
    `accentColor`, `backgroundColor`, `codeBackground` accept `#rrggbb`;
-   `font` and `defaultBackground` are plain strings. Anything omitted
+   `font` and `defaultBackground` are plain strings; `defaultGradient` takes
+   the same `key=value` spec as the per-slide directive. Anything omitted
    inherits from the base template.
 3. A `template=NAME` CLI argument overrides the inline choice entirely — it
    replaces the theme struct, so inline hex overrides are discarded too.
@@ -61,6 +67,28 @@ sentinel that swaps the deck for one preview slide per bundled template.
 
 `colorFromHex` requires exactly six hex digits after stripping `#`; anything
 else silently falls back to the base template's swatch.
+
+## Gradients
+
+`SlideGradient` (angle, `from`, `to`, `startColor`, `endColor`) renders as a
+`LinearGradient` above the slide background. Two design points that are easy
+to break:
+
+- **It replaces the flat darken overlay, not stacks with it.**
+  `PresenterContent.backgroundOverlay` picks *one* of gradient / shade /
+  nothing. Stacking them double-darkens the image, and the config panel's
+  Shade slider is consequently inert on gradient slides.
+- **It applies with no background image**, unlike the shade — that is what
+  lets a gradient be the background.
+
+Resolution is `slide.gradient ?? theme.defaultGradient`, mirroring how the
+slide's own theme override beats the deck's.
+
+The angle convention is CSS's: `0` is top-to-bottom and increases clockwise.
+Since SwiftUI's y grows downward, the direction vector is `(sin θ, cos θ)`,
+and the axis is that vector centred on `(0.5, 0.5)`. `from`/`to` become the
+locations of two `Gradient.Stop`s, which is what produces the hold-fade-hold
+shape for free — SwiftUI extends the first and last stops to the edges.
 
 ## Threading the theme through views
 

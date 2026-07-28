@@ -26,6 +26,75 @@ enum FontLoader {
     }
 }
 
+// MARK: - Gradient overlay
+
+// Drawn above the slide background — image, SVG, or the theme's fill colour.
+// `from`/`to` are normalized positions along the gradient axis: startColor
+// holds from 0 to `from`, fades to endColor by `to`, then holds through 1.
+// SwiftUI's stop handling gives the two plateaus for free.
+struct SlideGradient {
+    let angle: Double
+    let from: Double
+    let to: Double
+    let startColor: Color
+    let endColor: Color
+
+    var linearGradient: LinearGradient {
+        // 0 = top-to-bottom, increasing clockwise (CSS convention). Screen y
+        // grows downward, so the direction vector is (sin, cos).
+        let radians = angle * .pi / 180
+        let dx = sin(radians) / 2
+        let dy = cos(radians) / 2
+        let lo = min(from, to)
+        let hi = max(from, to)
+        return LinearGradient(
+            stops: [
+                Gradient.Stop(color: startColor, location: lo),
+                Gradient.Stop(color: endColor, location: hi),
+            ],
+            startPoint: UnitPoint(x: 0.5 - dx, y: 0.5 - dy),
+            endPoint: UnitPoint(x: 0.5 + dx, y: 0.5 + dy)
+        )
+    }
+
+    // "angle=180 from=0.35 to=1 start=#000000@0 end=#000000@0.85"
+    static func parse(_ spec: String) -> SlideGradient? {
+        var config: [String: String] = [:]
+        for token in spec.split(whereSeparator: { $0 == " " || $0 == "\n" || $0 == "\t" }) {
+            guard let eq = token.firstIndex(of: "=") else { continue }
+            let key = String(token[..<eq]).lowercased()
+            let value = String(token[token.index(after: eq)...])
+            if !key.isEmpty, !value.isEmpty { config[key] = value }
+        }
+        guard !config.isEmpty else { return nil }
+        return SlideGradient(
+            angle: config["angle"].flatMap(Double.init) ?? 0,
+            from: clamp01(config["from"].flatMap(Double.init) ?? 0),
+            to: clamp01(config["to"].flatMap(Double.init) ?? 1),
+            startColor: config["start"].flatMap(color) ?? .clear,
+            endColor: config["end"].flatMap(color) ?? Color(nsColor: NSColor(calibratedWhite: 0, alpha: 0.6))
+        )
+    }
+
+    private static func clamp01(_ v: Double) -> Double { min(max(v, 0), 1) }
+
+    // "#rrggbb" or "#rrggbb@a", where a is 0...1.
+    private static func color(_ raw: String) -> Color? {
+        let parts = raw.split(separator: "@", maxSplits: 1)
+        let hex = parts[0].trimmingCharacters(in: CharacterSet(charactersIn: "#"))
+        guard hex.count == 6 else { return nil }
+        var rgb: UInt64 = 0
+        guard Scanner(string: hex).scanHexInt64(&rgb) else { return nil }
+        let alpha = parts.count > 1 ? clamp01(Double(parts[1]) ?? 1) : 1
+        return Color(nsColor: NSColor(
+            calibratedRed: CGFloat((rgb >> 16) & 0xFF) / 255.0,
+            green: CGFloat((rgb >> 8) & 0xFF) / 255.0,
+            blue: CGFloat(rgb & 0xFF) / 255.0,
+            alpha: CGFloat(alpha)
+        ))
+    }
+}
+
 // MARK: - Theme system
 
 struct DeckTheme {
@@ -36,6 +105,8 @@ struct DeckTheme {
     let fontName: String
     let defaultBackground: String?
     let templateName: String
+    // Defaulted so the ten bundled entries below need no gradient argument.
+    var defaultGradient: SlideGradient? = nil
 
     private static func rgb(_ r: Double, _ g: Double, _ b: Double, _ a: Double = 1.0) -> Color {
         Color(nsColor: NSColor(calibratedRed: r, green: g, blue: b, alpha: a))
@@ -149,28 +220,68 @@ struct Slide {
     let background: String?
     let columns: [String]
     let themeOverride: DeckTheme?
+    var gradient: SlideGradient? = nil
 
     static func parse(_ raw: String) -> Slide {
         var bg: String?
+        var gradient: SlideGradient?
         var kept: [String] = []
+        var pending: [String] = []
+
+        // Returns false for any comment that isn't a directive, so unknown
+        // comments stay in the body exactly as before.
+        func consume(_ inner: String) -> Bool {
+            let t = inner.trimmingCharacters(in: .whitespacesAndNewlines)
+            if t.hasPrefix("bg:") {
+                bg = String(t.dropFirst(3)).trimmingCharacters(in: .whitespacesAndNewlines)
+                return true
+            }
+            if t.hasPrefix("gradient:") {
+                gradient = SlideGradient.parse(String(t.dropFirst(9)))
+                return true
+            }
+            return false
+        }
+
+        func stripDelimiters(_ s: String) -> String {
+            s.replacingOccurrences(of: "<!--", with: "")
+             .replacingOccurrences(of: "-->", with: "")
+        }
+
         for line in raw.components(separatedBy: "\n") {
             let t = line.trimmingCharacters(in: .whitespaces)
-            if t.hasPrefix("<!--"), t.hasSuffix("-->"), t.contains("bg:") {
-                let inner = t.replacingOccurrences(of: "<!--", with: "")
-                             .replacingOccurrences(of: "-->", with: "")
-                             .trimmingCharacters(in: .whitespaces)
-                if inner.hasPrefix("bg:") {
-                    bg = String(inner.dropFirst(3)).trimmingCharacters(in: .whitespaces)
+            // Continuing a comment opened on an earlier line — gradient specs
+            // are long enough to want wrapping.
+            if !pending.isEmpty {
+                pending.append(line)
+                if t.hasSuffix("-->") {
+                    if !consume(stripDelimiters(pending.joined(separator: "\n"))) {
+                        kept.append(contentsOf: pending)
+                    }
+                    pending.removeAll()
+                }
+                continue
+            }
+            // Only a line that *starts* with the delimiter is a directive, so
+            // `<!-- bg: path -->` quoted mid-sentence in prose stays inert.
+            if t.hasPrefix("<!--") {
+                if t.hasSuffix("-->") {
+                    if consume(stripDelimiters(t)) { continue }
+                } else {
+                    pending.append(line)
                     continue
                 }
             }
             kept.append(line)
         }
+        // An unterminated comment is left verbatim rather than swallowing the
+        // rest of the slide.
+        kept.append(contentsOf: pending)
         let body = kept.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
         let cols = body.components(separatedBy: "\n|||\n").map {
             $0.trimmingCharacters(in: .whitespacesAndNewlines)
         }
-        return Slide(background: bg, columns: cols, themeOverride: nil)
+        return Slide(background: bg, columns: cols, themeOverride: nil, gradient: gradient)
     }
 }
 
@@ -279,7 +390,9 @@ struct Deck {
             codeBackground: config["codeBackground"].flatMap(colorFromHex) ?? base.codeBackground,
             fontName: config["font"] ?? base.fontName,
             defaultBackground: config["defaultBackground"] ?? base.defaultBackground,
-            templateName: templateName
+            templateName: templateName,
+            defaultGradient: config["defaultGradient"].flatMap(SlideGradient.parse)
+                ?? base.defaultGradient
         )
 
         let contentStr = contentLines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -974,7 +1087,7 @@ struct PresenterContent: View {
             // otherwise the theme's background color.
             Color.clear
                 .background(backgroundFill(bg, theme: theme))
-                .overlay(bg.hasContent ? Color.black.opacity(shadeAmount) : Color.clear)
+                .overlay(backgroundOverlay(theme: theme, shade: shadeAmount, hasContent: bg.hasContent))
                 .clipShape(shape)
 
             shape.strokeBorder(theme.textColor.opacity(0.35), lineWidth: 1.5)
@@ -1016,6 +1129,21 @@ struct PresenterContent: View {
 
     private var currentTheme: DeckTheme {
         state.currentSlide.themeOverride ?? state.deck.theme
+    }
+
+    // A gradient stands in for the flat darken overlay rather than stacking
+    // with it — it is the readability treatment, and doubling them muddies
+    // the image. Unlike the shade it also applies with no background image,
+    // so a gradient can be the background.
+    @ViewBuilder
+    private func backgroundOverlay(theme: DeckTheme, shade: Double, hasContent: Bool) -> some View {
+        if let gradient = state.currentSlide.gradient ?? theme.defaultGradient {
+            gradient.linearGradient
+        } else if hasContent {
+            Color.black.opacity(shade)
+        } else {
+            Color.clear
+        }
     }
 
     private enum BackgroundSource {

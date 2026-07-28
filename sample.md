@@ -159,6 +159,34 @@ decides.
 
 ---
 
+<!-- bg: images/boat.jpg -->
+<!-- gradient: angle=0 from=0 to=0.6 start=#000000@0.85 end=#000000@0.0 -->
+
+# Gradient scrim
+
+A gradient replaces the flat darken overlay, so you can put the darkening
+exactly where the text is and leave the rest of the photo alone.
+
+This one is opaque black at the top, fully clear by 60% down.
+
+---
+
+<!-- gradient: angle=135 from=0.1 to=0.9 start=#3a1d52@1.0 end=#0f1733@1.0 -->
+
+# Gradient as background
+
+With no `<!-- bg: -->` at all, the gradient becomes the background itself —
+drawn over the theme's fill colour.
+
+- `angle` — degrees; `0` is top-to-bottom, increasing clockwise
+- `from` / `to` — where the fade starts and finishes, `0`–`1`
+- `start` / `end` — `#rrggbb` or `#rrggbb@alpha`
+
+The start colour holds from `0` to `from`, fades across to the end colour by
+`to`, then holds through to `1`. This one runs diagonally at 135°.
+
+---
+
 ## Point it at a folder
 
 Give the app a **directory** instead of a `.md` file and it builds a photo
