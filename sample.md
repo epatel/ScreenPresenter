@@ -160,14 +160,18 @@ decides.
 ---
 
 <!-- bg: images/boat.jpg -->
-<!-- gradient: angle=0 from=0 to=0.6 start=#000000@0.85 end=#000000@0.0 -->
+<!-- gradient: angle=0 from=0.6 to=1 start=#000000@0.85 end=#000000@0.0 -->
 
 # Gradient scrim
 
-A gradient replaces the flat darken overlay, so you can put the darkening
-exactly where the text is and leave the rest of the photo alone.
+A gradient replaces the flat darken overlay, so you choose where the
+darkening sits instead of dimming the whole photo evenly.
 
-This one is opaque black at the top, fully clear by 60% down.
+This one holds 85% black across the top 60% — the whole text area — then
+fades out over the remaining 40%, reaching fully clear at the bottom edge.
+The photo reads through along the bottom strip.
+
+Widen the plateau by raising `from`; move the reveal by changing `to`.
 
 ---
 

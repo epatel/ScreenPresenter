@@ -17,7 +17,7 @@ a dimmed backdrop with no menus, toolbars, or window chrome.
 - Syntax-highlighted **code blocks** (Highlightr, `atom-one-dark`, ~190 languages)
 - **10 bundled themes** (`## Theme` section in markdown, or `template=NAME` flag) plus per-key color/font overrides
 - Five bundled Google Fonts (Inter, Space Grotesk, Merriweather, Playfair Display, JetBrains Mono)
-- **Shift-hover** opens a live-config panel: font family, font size, per-slide shade
+- **Shift-hover** opens a live-config panel: font family, font size, per-slide shade, and outer margin
 - **Drop a `.md` file** onto the app in Finder to load it
 - Remembers the last viewed slide between opens
 
@@ -151,7 +151,7 @@ as space-separated `key=value` pairs, and may wrap across lines:
 
 ```markdown
 <!-- bg: images/boat.jpg -->
-<!-- gradient: angle=0 from=0 to=0.6 start=#000000@0.85 end=#000000@0.0 -->
+<!-- gradient: angle=0 from=0.6 to=1 start=#000000@0.85 end=#000000@0.0 -->
 ```
 
 | Key | Meaning | Default |
@@ -163,9 +163,14 @@ as space-separated `key=value` pairs, and may wrap across lines:
 | `end` | Colour after `to` | black at 0.6 |
 
 The start colour is held flat from `0` to `from`, interpolates to the end
-colour between `from` and `to`, then holds flat through to `1` — so the
-example above is solid black across the top of the slide, fully clear by 60%
-down, and untouched below that.
+colour between `from` and `to`, then holds flat through to `1`. With
+`angle=0` position `0` is the top edge, so the example above holds 85% black
+across the top 60% of the slide, then fades out over the remaining 40% to
+reach fully clear at the bottom edge.
+
+That flat plateau is the point of `from`: text sitting in the top 60% gets a
+uniform backdrop rather than a gradient running through it, and the image
+reads through along the bottom.
 
 Omitted keys take their defaults, and unknown keys are ignored. `from` and
 `to` are clamped into `0`–`1`, and are swapped if given out of order.
@@ -287,8 +292,18 @@ below the presenter with live controls:
 - **Font** — 5 bundled Google Fonts + System + common installed fonts (overrides the theme's font for this session)
 - **Size** — 14–40pt (scales headings proportionally; code blocks render at 0.75×)
 - **Shade** — 0.0–1.0, applied per slide and persisted for the session
+- **Margin** — 0–400pt of space between the panel and the screen edges; resizes the presenter live
 
-Settings are in-memory only and reset when the app quits.
+Font, Size, and Shade are in-memory only and reset when the app quits.
+**Margin is remembered between launches** — it describes your display rather
+than the deck.
+
+The margin is the literal gap at each edge, so `0` fills the screen (below the
+menu bar) and `200` leaves 200pt all round. The panel has no maximum size —
+how large it gets is entirely yours to set.
+
+A slide with a gradient ignores the **Shade** slider, since a gradient
+replaces the automatic darken overlay rather than stacking with it.
 
 ## Building a distributable `.app`
 

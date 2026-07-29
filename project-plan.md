@@ -38,6 +38,7 @@ are plain `.md` files that stay readable in any editor.
 - [x] Audit both sample decks against the feature list and close the gaps
 - [x] Gradient overlays — per-slide directive plus a `defaultGradient` theme key
 - [x] First public release: `v0.3.0`, signed, notarized, stapled, on GitHub
+- [x] Outer margin control in the config panel, persisted across launches
 - [ ] Revoke the exposed app-specific password and regenerate it in `.env`
 - [ ] Confirm the release zip opens cleanly after a *browser* download
 
@@ -94,6 +95,19 @@ larger ones lives in the decision cards under `cards/`.
   code hash and returns no artifact. Stapling is the separate step that
   embeds that ticket locally, and it is what makes offline launch work. A
   `.zip` cannot itself be stapled; staple the `.app`, then re-zip.
+- **2026-07-29** — The presenter panel has **no maximum size**. It was
+  `min(1100, width * 0.75) × min(720, height * 0.75)`, and the first cut of
+  the margin control kept that cap — which made the slider feel broken, since
+  a cap already insets the panel by whatever slack it leaves (126pt
+  horizontally on a 1352pt display), so every margin below that did nothing.
+  A cap and a margin control cannot both own the panel's size. Do not
+  reintroduce one as a "safety" limit; the 320×240 floors already cover the
+  degenerate end.
+- **2026-07-29** — Outer margin is the one config-panel control that
+  **persists** (`outerMargin` in `UserDefaults`, clamped 0–400 on load). It
+  describes the display rather than the deck, so it is also not reset by
+  `loadDeck` — a new deck should not move the window. Font, size, and shade
+  stay session-only.
 - **2026-07-29** — `Slide.parse` now accepts multi-line HTML comments, so a
   five-key gradient can wrap. Only a line whose trimmed form *starts* with
   `<!--` opens a directive — the sample decks quote `<!-- bg: path -->` inside
@@ -144,6 +158,9 @@ proves very little. Three items:
 - **Gradient rendering.** The angle convention has only been confirmed
   analytically (`0` should run top-to-bottom, `90` left-to-right). Check the
   two new gradient slides in `sample.md`. This shipped in `v0.3.0` unseen.
+- **The margin slider.** Sizing is verified numerically against the real
+  `visibleFrame`, but nobody has watched the panel resize — including the
+  live relayout that happens while the config panel is open.
 - **The animated SVG.** WKWebView is expected to play SMIL, but nobody has
   watched `images/animated-bg.svg` move.
 - **Browser download.** The artifact was validated after a `gh` download,

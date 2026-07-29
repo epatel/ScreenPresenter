@@ -27,9 +27,36 @@ would otherwise eat the hit-testing at the true screen corner.
 
 ## Panel sizing
 
-`min(1100, screen.width * 0.75)` × `min(720, screen.height * 0.75)`, centered.
-The original size is retained in `Controller.panelBaseSize` so the panel can
-be resized (e.g. for video) and restored.
+Driven by the user's **outer margin** (`PresenterSettings.outerMargin`):
+
+```swift
+width  = max(320, visibleFrame.width  - margin * 2)
+height = max(240, visibleFrame.height - margin * 2)
+```
+
+The margin is the literal gap at every edge — margin 0 is full-bleed within
+`visibleFrame`. Default is 40.
+
+`Controller.panelBaseSize` is a *computed* property over that formula, not a
+stored size — so anything reading it picks up the current margin.
+`centerPanel(size:)` centers an arbitrary size on `visibleFrame`;
+`recenterPanel()` is the no-argument form using `panelBaseSize`.
+
+**There is deliberately no maximum size, and reintroducing one is a trap.**
+The panel was originally `min(1100, width * 0.75) × min(720, height * 0.75)`,
+and the first version of the margin control kept that cap. It made the slider
+feel broken: a cap already insets the panel by whatever slack it leaves — 126pt
+horizontally on a 1352pt-wide display — so every margin below that value
+changed nothing at all. A cap and a margin control cannot both own the panel's
+size.
+
+The 320×240 floors are a different thing: they only bite at the extreme end of
+the slider, where the margin would otherwise leave no panel.
+
+`Controller.marginObserver` is a Combine subscription that relays slider
+changes to `applyMargin(_:)`. It reads the **emitted** value rather than
+`settings.outerMargin`, because `@Published` fires in `willSet` and the
+stored property is still stale inside the sink.
 
 ## SwiftUI interop
 

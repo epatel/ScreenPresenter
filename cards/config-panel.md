@@ -16,9 +16,18 @@ below the presenter. Hovering without Shift shows the presenter alone.
 | Font | 5 bundled Google Fonts + `System` + common installed fonts | Overrides the deck theme's font for this session |
 | Size | 14–40 pt | Base font size; headings scale proportionally, code blocks render at 0.75× |
 | Shade | 0.0–1.0 | Darkening overlay applied over the current slide's background image |
+| Margin | 0–400 pt, step 10 | Literal gap between the panel and each screen edge — resizes the panel live; `0` is full-bleed |
 
-All three live on `PresenterSettings`, an `ObservableObject`, so edits
-propagate to the SwiftUI tree immediately.
+All four live on `PresenterSettings`, an `ObservableObject`, so edits
+propagate to the SwiftUI tree immediately. Margin is the exception to that
+rule in one respect: the panel is an AppKit window, not part of the SwiftUI
+tree, so `Controller` subscribes to `settings.$outerMargin` and resizes the
+window itself. That subscription must use the value the publisher emits —
+`@Published` fires in `willSet`, so reading `settings.outerMargin` inside the
+sink gets the previous value.
+
+A gradient on the current slide makes the **Shade** slider inert, since a
+gradient replaces the flat darken overlay rather than stacking with it.
 
 ## The `"System"` sentinel
 
@@ -35,11 +44,17 @@ picking a font manually. `Controller.loadDeck` deliberately resets it back to
 
 ## Lifetime
 
-- **Per session, in memory only.** Nothing here is written to `UserDefaults`;
-  quitting the app resets everything to defaults.
+- **Font, Size, and Shade are per session, in memory only.** Quitting resets
+  them to defaults.
+- **Margin persists**, under the `outerMargin` key in `UserDefaults`, written
+  from a `didSet`. It is a property of the display rather than of the deck, so
+  it is the one control that survives a relaunch. Absent key means the default
+  of 40; a stored value is clamped into 0–400 on load, so a hand-edited plist
+  cannot produce an unusable panel.
 - **Reset on deck load.** `Controller.loadDeck` calls
   `settings.resetPerSlideSettings()` and restores `fontName` to `"System"`, so
-  a dropped file does not inherit the previous deck's tweaks.
+  a dropped file does not inherit the previous deck's tweaks. Margin is
+  deliberately *not* reset — a new deck should not move the window.
 - **Shade is per slide index**, not global — adjusting it on slide 3 leaves
   slide 4 alone. Because it is keyed by index, loading a different deck without
   the reset would apply slide 3's shade to the new deck's slide 3.

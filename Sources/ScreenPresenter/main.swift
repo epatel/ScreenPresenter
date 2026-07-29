@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import CoreText
 import Highlightr
 import Network
@@ -487,6 +488,23 @@ final class PresenterSettings: ObservableObject {
     @Published var fontName: String = "System"
     @Published var baseFontSize: CGFloat = 24
     @Published var theme: DeckTheme = .default()
+
+    // Gap between the panel and the screen edges. Unlike the other controls
+    // here this one persists — it is a property of the display, not the deck.
+    @Published var outerMargin: CGFloat = PresenterSettings.loadMargin() {
+        didSet { UserDefaults.standard.set(Double(outerMargin), forKey: "outerMargin") }
+    }
+
+    static let marginRange: ClosedRange<CGFloat> = 0...400
+    static let defaultMargin: CGFloat = 40
+
+    private static func loadMargin() -> CGFloat {
+        guard UserDefaults.standard.object(forKey: "outerMargin") != nil else {
+            return defaultMargin
+        }
+        let stored = CGFloat(UserDefaults.standard.double(forKey: "outerMargin"))
+        return min(max(stored, marginRange.lowerBound), marginRange.upperBound)
+    }
     @Published private var shadeByIndex: [Int: Double] = [:]
 
     static let defaultShade: Double = 0.45
@@ -1247,6 +1265,14 @@ struct ConfigPanelView: View {
                     .frame(width: 36, alignment: .trailing)
             }
 
+            row("Margin") {
+                Slider(value: $settings.outerMargin, in: PresenterSettings.marginRange, step: 10)
+                Text("\(Int(settings.outerMargin))")
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .frame(width: 36, alignment: .trailing)
+            }
+
             HStack {
                 Spacer()
                 Button("Quit") { NSApp.terminate(nil) }
@@ -1294,7 +1320,24 @@ final class Controller: NSObject, NSWindowDelegate {
     let settings = PresenterSettings()
     let videoPlayback = VideoPlayback()
     var panel: PresenterPanel!
-    var panelBaseSize: NSSize = .zero
+    var marginObserver: AnyCancellable?
+
+    // Panel is the visible screen inset by the user's margin, so the margin is
+    // the literal gap at every edge. There is deliberately no maximum size: a
+    // cap makes small margins inert, since the panel is already inset by the
+    // slack the cap leaves. The floors only bite at the extreme end.
+    private func panelSize(margin: CGFloat) -> NSSize {
+        guard let screen = NSScreen.main else { return NSSize(width: 1100, height: 720) }
+        let vf = screen.visibleFrame
+        return NSSize(
+            width: max(320, vf.width - margin * 2),
+            height: max(240, vf.height - margin * 2)
+        )
+    }
+
+    var panelBaseSize: NSSize { panelSize(margin: settings.outerMargin) }
+
+    private let configPanelSize = NSSize(width: 540, height: 210)
     var configPanel: NSPanel?
     var backdrop: NSWindow!
     var corner: NSWindow!
@@ -1311,6 +1354,21 @@ final class Controller: NSObject, NSWindowDelegate {
         buildBackdrop()
         buildPanel()
         buildCornerTrigger()
+        // @Published fires in willSet, so settings.outerMargin is still the old
+        // value inside the sink — lay out from the emitted one.
+        marginObserver = settings.$outerMargin
+            .dropFirst()
+            .sink { [weak self] newMargin in self?.applyMargin(newMargin) }
+    }
+
+    private func applyMargin(_ margin: CGFloat) {
+        guard isShown else { return }
+        let size = panelSize(margin: margin)
+        if configPanel != nil {
+            layoutWithConfig(panelSize: size)
+        } else {
+            centerPanel(size: size)
+        }
     }
 
     // Called when macOS hands us a file or folder via Finder drop / "Open With"
@@ -1362,12 +1420,11 @@ final class Controller: NSObject, NSWindowDelegate {
 
     private func buildPanel() {
         guard let screen = NSScreen.main else { return }
-        let w: CGFloat = min(1100, screen.frame.width * 0.75)
-        let h: CGFloat = min(720, screen.frame.height * 0.75)
+        let size = panelBaseSize
         let rect = NSRect(
-            x: screen.frame.midX - w / 2,
-            y: screen.frame.midY - h / 2,
-            width: w, height: h
+            x: screen.frame.midX - size.width / 2,
+            y: screen.frame.midY - size.height / 2,
+            width: size.width, height: size.height
         )
         let p = PresenterPanel(
             contentRect: rect,
@@ -1394,7 +1451,6 @@ final class Controller: NSObject, NSWindowDelegate {
         host.autoresizingMask = [.width, .height]
         p.contentView?.addSubview(host)
         panel = p
-        panelBaseSize = rect.size
     }
 
     // Small window at the top-right corner that triggers show on mouse enter.
@@ -1483,16 +1539,20 @@ final class Controller: NSObject, NSWindowDelegate {
         }
     }
 
-    // Restore the panel to its original size and center it on visibleFrame.
-    // showConfigPanel() may resize/reposition afterward if needed.
+    // Restore the panel to its margin-derived size and center it on
+    // visibleFrame. showConfigPanel() may resize/reposition afterward.
     private func recenterPanel() {
+        centerPanel(size: panelBaseSize)
+    }
+
+    private func centerPanel(size: NSSize) {
         guard let screen = NSScreen.main else { return }
         let vf = screen.visibleFrame
         let rect = NSRect(
-            x: vf.midX - panelBaseSize.width / 2,
-            y: vf.midY - panelBaseSize.height / 2,
-            width: panelBaseSize.width,
-            height: panelBaseSize.height
+            x: vf.midX - size.width / 2,
+            y: vf.midY - size.height / 2,
+            width: size.width,
+            height: size.height
         )
         panel.setFrame(rect, display: true)
     }
@@ -1510,30 +1570,44 @@ final class Controller: NSObject, NSWindowDelegate {
         NSApp.setActivationPolicy(.accessory)
     }
 
-    private func showConfigPanel() {
-        guard let screen = NSScreen.main else { return }
+    // Fit the presenter+config pair inside visibleFrame: shrink the presenter
+    // if needed, then center the whole group vertically. Re-runnable, so the
+    // Margin slider can relayout without rebuilding the config panel.
+    private func layoutWithConfig(panelSize size: NSSize) {
+        guard let screen = NSScreen.main, let cp = configPanel else { return }
         let vf = screen.visibleFrame
-        let w: CGFloat = 540
-        let h: CGFloat = 170
         let gap: CGFloat = 16
-        let margin: CGFloat = 20
+        let screenInset: CGFloat = 20
 
-        // Fit the presenter+config pair inside visibleFrame: shrink the presenter
-        // if needed, then center the whole group vertically.
-        var pFrame = panel.frame
-        let maxPanelH = vf.height - h - gap - margin * 2
+        var pFrame = NSRect(origin: .zero, size: size)
+        let maxPanelH = vf.height - configPanelSize.height - gap - screenInset * 2
         if pFrame.height > maxPanelH {
             pFrame.size.height = max(maxPanelH, 300)
         }
-        let totalH = pFrame.height + gap + h
+        let totalH = pFrame.height + gap + configPanelSize.height
         pFrame.origin.x = vf.midX - pFrame.width / 2
         pFrame.origin.y = vf.midY + totalH / 2 - pFrame.height
         panel.setFrame(pFrame, display: true)
 
+        cp.setFrame(
+            NSRect(
+                x: vf.midX - configPanelSize.width / 2,
+                y: pFrame.minY - gap - configPanelSize.height,
+                width: configPanelSize.width,
+                height: configPanelSize.height
+            ),
+            display: true
+        )
+    }
+
+    private func showConfigPanel() {
+        guard configPanel == nil, let screen = NSScreen.main else { return }
+        let vf = screen.visibleFrame
         let rect = NSRect(
-            x: vf.midX - w / 2,
-            y: pFrame.minY - gap - h,
-            width: w, height: h
+            x: vf.midX - configPanelSize.width / 2,
+            y: vf.midY,
+            width: configPanelSize.width,
+            height: configPanelSize.height
         )
         let cp = NSPanel(
             contentRect: rect,
@@ -1556,6 +1630,7 @@ final class Controller: NSObject, NSWindowDelegate {
         cp.contentView?.addSubview(host)
         cp.orderFront(nil)
         configPanel = cp
+        layoutWithConfig(panelSize: panelBaseSize)
     }
 
     private func handleKey(_ code: UInt16) {
