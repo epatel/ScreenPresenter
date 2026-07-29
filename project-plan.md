@@ -39,7 +39,10 @@ are plain `.md` files that stay readable in any editor.
 - [x] Gradient overlays — per-slide directive plus a `defaultGradient` theme key
 - [x] First public release: `v0.3.0`, signed, notarized, stapled, on GitHub
 - [x] Outer margin control in the config panel, persisted across launches
+- [x] MIT `LICENSE` file — the README claimed MIT with no licence text present
+- [x] `v0.4.0` released; gradients, margin, and the animated SVG verified running
 - [ ] Revoke the exposed app-specific password and regenerate it in `.env`
+      (deferred by choice — never reached the repo, terminal output only)
 - [ ] Confirm the release zip opens cleanly after a *browser* download
 
 ## Decisions
@@ -151,30 +154,37 @@ and the zip *re-downloaded from GitHub* is byte-identical to the local build
 `source=Notarized Developer ID` under `spctl`. Two Makefile bugs were fixed
 along the way — see the decisions above.
 
-**Unverified — start here.** The release is sound as a *package*, but nothing
-in it has been watched running. `swift build` is clean, which in this codebase
-proves very little. Three items:
+`v0.4.0` followed, adding the outer margin control and removing the panel's
+maximum size, released the same way (submission
+`cb581d94-0aeb-40a3-a33d-e0188b86f5e0`, checksum matched after re-download).
+An MIT `LICENSE` was added — the README had claimed MIT since the start but no
+licence text existed, so the terms had never actually been granted.
 
-- **Gradient rendering.** The angle convention has only been confirmed
-  analytically (`0` should run top-to-bottom, `90` left-to-right). Check the
-  two new gradient slides in `sample.md`. This shipped in `v0.3.0` unseen.
-- **The margin slider.** Sizing is verified numerically against the real
-  `visibleFrame`, but nobody has watched the panel resize — including the
-  live relayout that happens while the config panel is open.
-- **The animated SVG.** WKWebView is expected to play SMIL, but nobody has
-  watched `images/animated-bg.svg` move.
-- **Browser download.** The artifact was validated after a `gh` download,
-  which sets no `com.apple.quarantine` attribute. Stapling should make that
-  moot, but one Safari download and double-click would prove it.
+**Verified running (2026-07-29).** Everything from this session has now been
+confirmed in the app, not just compiled:
 
-**Security follow-up.** `make notarize` echoed its recipe, printing the
-app-specific password in cleartext to the terminal and into the session
-transcript. The recipe is silenced now, but the exposed credential still needs
-revoking at appleid.apple.com and regenerating in `.env`. It grants
+- Gradient angles render as intended — `0` runs top-to-bottom, and the
+  diagonal on the second gradient slide is correct.
+- The margin slider resizes the panel live, with the config panel tracking
+  below it.
+- `images/animated-bg.svg` animates — WKWebView does play SMIL.
+- Margin survives quit and relaunch, so the `UserDefaults` round-trip works.
+
+Still unconfirmed, and minor: the release zip has only been opened after a
+`gh` download, which sets no `com.apple.quarantine` attribute. Stapling should
+make a browser download equivalent, but nobody has proven it.
+
+**Security follow-up (accepted risk, 2026-07-29).** `make notarize` echoed its
+recipe, printing the app-specific password in cleartext to the terminal and
+into a session transcript. The recipe is silenced now and the `0.4.0` run
+confirmed it no longer leaks. A full history scan — all 209 objects across
+every ref *and* the reflog — found the credential in no commit, and it is
+absent from `.env.example` and from the shipped `.app`, so this was never a
+repo leak. Rotation is deferred by choice, not forgotten: revoke at
+appleid.apple.com and regenerate in `.env` when convenient. It grants
 notarization submission only, not account access.
 
-Next agent: nothing is mid-flight. The milestone list is clear; the two open
-questions below are the only threads.
+Next agent: nothing is mid-flight, and nothing is blocked.
 
 ## Open questions
 
