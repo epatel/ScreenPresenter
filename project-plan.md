@@ -37,6 +37,9 @@ are plain `.md` files that stay readable in any editor.
 - [x] Document photo-folder decks in the README
 - [x] Audit both sample decks against the feature list and close the gaps
 - [x] Gradient overlays — per-slide directive plus a `defaultGradient` theme key
+- [x] First public release: `v0.3.0`, signed, notarized, stapled, on GitHub
+- [ ] Revoke the exposed app-specific password and regenerate it in `.env`
+- [ ] Confirm the release zip opens cleanly after a *browser* download
 
 ## Decisions
 
@@ -79,6 +82,18 @@ larger ones lives in the decision cards under `cards/`.
   rather than trigonometric; and the spec uses **named `key=value` pairs**
   rather than positional CSS-like syntax, so omitted keys take defaults and
   order does not matter.
+- **2026-07-29** — Shipped `v0.3.0`, the first tagged release. Tags are
+  `vMAJOR.MINOR.PATCH` on `main`, cut from the commit carrying the matching
+  `VERSION`, with the notarized zip attached to a GitHub release.
+- **2026-07-29** — Distribution zips are built by `make dist-zip`, never
+  `make zip`. `zip` runs before notarization and exists only to feed
+  `notarytool`; the app it contains has no stapled ticket, so a machine
+  without network access would refuse it. `dist-zip` re-zips after `staple`.
+  `make dmg` was always correct — only the zip path had the gap.
+- **2026-07-29** — Notarization registers a ticket with Apple keyed to the
+  code hash and returns no artifact. Stapling is the separate step that
+  embeds that ticket locally, and it is what makes offline launch work. A
+  `.zip` cannot itself be stapled; staple the `.app`, then re-zip.
 - **2026-07-29** — `Slide.parse` now accepts multi-line HTML comments, so a
   five-key gradient can wrap. Only a line whose trimmed form *starts* with
   `<!--` opens a directive — the sample decks quote `<!-- bg: path -->` inside
@@ -115,15 +130,31 @@ It then added gradient overlays — the session's only application-code change,
 touching `SlideGradient` (new), `DeckTheme`, `Slide.parse`, and
 `PresenterContent.backgroundOverlay`.
 
-**Unverified — start here.** Nothing from this session has been seen in the
-running app. `swift build` is clean, but that catches little of what matters
-in this codebase. Two items specifically:
+`v0.3.0` was then tagged and released. The artifact was verified end to end:
+notarization `Accepted` (submission `fa6406ef-e805-450f-8c0b-7cabbd7d3d4a`),
+and the zip *re-downloaded from GitHub* is byte-identical to the local build
+(`b4fc7bed…f7faa5`), staples cleanly, and reports
+`source=Notarized Developer ID` under `spctl`. Two Makefile bugs were fixed
+along the way — see the decisions above.
+
+**Unverified — start here.** The release is sound as a *package*, but nothing
+in it has been watched running. `swift build` is clean, which in this codebase
+proves very little. Three items:
 
 - **Gradient rendering.** The angle convention has only been confirmed
   analytically (`0` should run top-to-bottom, `90` left-to-right). Check the
-  two new gradient slides in `sample.md`.
+  two new gradient slides in `sample.md`. This shipped in `v0.3.0` unseen.
 - **The animated SVG.** WKWebView is expected to play SMIL, but nobody has
   watched `images/animated-bg.svg` move.
+- **Browser download.** The artifact was validated after a `gh` download,
+  which sets no `com.apple.quarantine` attribute. Stapling should make that
+  moot, but one Safari download and double-click would prove it.
+
+**Security follow-up.** `make notarize` echoed its recipe, printing the
+app-specific password in cleartext to the terminal and into the session
+transcript. The recipe is silenced now, but the exposed credential still needs
+revoking at appleid.apple.com and regenerating in `.env`. It grants
+notarization submission only, not account access.
 
 Next agent: nothing is mid-flight. The milestone list is clear; the two open
 questions below are the only threads.
