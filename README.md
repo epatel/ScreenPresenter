@@ -390,4 +390,4 @@ images/                     assets referenced by sample.md
 
 ## License
 
-MIT.
+MIT — see [LICENSE](LICENSE).
