@@ -109,6 +109,8 @@ struct DeckTheme {
     let templateName: String
     // Defaulted so the ten bundled entries below need no gradient argument.
     var defaultGradient: SlideGradient? = nil
+    // 0 is SwiftUI's own default, so an existing deck lays out unchanged.
+    var lineSpacing: CGFloat = 0
 
     private static func rgb(_ r: Double, _ g: Double, _ b: Double, _ a: Double = 1.0) -> Color {
         Color(nsColor: NSColor(calibratedRed: r, green: g, blue: b, alpha: a))
@@ -396,7 +398,9 @@ struct Deck {
             defaultBackground: config["defaultBackground"] ?? base.defaultBackground,
             templateName: templateName,
             defaultGradient: config["defaultGradient"].flatMap(SlideGradient.parse)
-                ?? base.defaultGradient
+                ?? base.defaultGradient,
+            lineSpacing: config["lineSpacing"].flatMap { Double($0) }.map { CGFloat($0) }
+                ?? base.lineSpacing
         )
 
         let contentStr = contentLines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -645,12 +649,15 @@ struct MarkdownSlide: View {
     @EnvironmentObject var settings: PresenterSettings
 
     var body: some View {
+        // lineSpacing on the stack reaches every Text below it; CodeBlockView
+        // resets it, since a listing has its own rhythm.
         VStack(alignment: .leading, spacing: 18) {
             ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
                 render(block: block)
             }
             Spacer(minLength: 0)
         }
+        .lineSpacing(theme.lineSpacing)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
@@ -857,6 +864,7 @@ struct CodeBlockView: View {
 
     var body: some View {
         Text(highlighted(size: settings.baseFontSize * 0.75))
+            .lineSpacing(0)
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(

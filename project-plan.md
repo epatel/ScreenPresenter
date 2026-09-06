@@ -48,6 +48,8 @@ are plain `.md` files that stay readable in any editor.
 - [x] `v0.6.0` released — slideshows, signed, notarized, stapled, on GitHub
 - [x] `<!-- ... -->` works as a plain comment, not just a directive carrier
 - [x] `v0.7.0` released — comments, signed, notarized, stapled, on GitHub
+- [x] `lineSpacing` theme key — extra leading, set on the `## Theme` page
+- [x] `v0.8.0` released — lineSpacing, signed, notarized, stapled, on GitHub
 - [ ] Revoke the exposed app-specific password and regenerate it in `.env`
       (deferred by choice — never reached the repo, terminal output only)
 - [ ] Confirm the release zip opens cleanly after a *browser* download
@@ -290,6 +292,14 @@ take their directives.
 submission `5f16e729-0124-4f60-a8ea-6904f4ffc1d9`; the zip re-downloaded from
 GitHub is byte-identical to the local build (`343c5f4c…449233`), staples
 cleanly, and reports `source=Notarized Developer ID`.
+
+**`lineSpacing` (2026-09-06).** A new `## Theme` key giving extra leading in
+points, defaulting to `0` — SwiftUI's own default, so existing decks lay out
+unchanged. Applied once on `MarkdownSlide`'s `VStack`, which reaches every
+`Text` under it; `CodeBlockView` resets it to `0` so listings keep their own
+rhythm. It is leading *within* a wrapped block — the 18pt gap *between* blocks
+is the stack's `spacing` and stays fixed. `theme-demo.md` sets `lineSpacing: 4`
+and documents the key. Verified running at 4pt. Released as `v0.8.0`.
 
 Next agent: nothing is mid-flight, and nothing is blocked.
 

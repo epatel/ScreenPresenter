@@ -1,6 +1,7 @@
 ## Theme
 
 template: ocean
+lineSpacing: 4
 
 ---
 
@@ -24,7 +25,11 @@ template: ocean
 font: Playfair Display
 textColor: #ffffff
 accentColor: #00bfff
+lineSpacing: 4
 ```
+
+`lineSpacing` is extra leading between lines of text, in points. This deck
+uses `4`.
 
 Available templates:
 

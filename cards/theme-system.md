@@ -20,12 +20,15 @@ struct DeckTheme {
     let defaultBackground: String?
     let templateName: String
     var defaultGradient: SlideGradient? = nil
+    var lineSpacing: CGFloat = 0
 }
 ```
 
-`defaultGradient` is the one `var`, and it carries a default so the ten
-bundled entries need no gradient argument. Declare any future optional
-addition the same way rather than editing all ten.
+`defaultGradient` and `lineSpacing` are the `var`s, and both carry defaults so
+the ten bundled entries need no argument for them. Declare any future optional
+addition the same way rather than editing all ten. `lineSpacing` defaults to
+`0` because that is SwiftUI's own default — an existing deck lays out
+unchanged.
 
 `DeckTheme.bundled` is a `[String: DeckTheme]` of 10 templates. Palette
 entries are built with the private helpers `rgb(r, g, b, a = 1)` and
@@ -58,9 +61,9 @@ sentinel that swaps the deck for one preview slide per bundled template.
 2. Lines are parsed as `key: value`. `template` selects the base theme
    (unknown names fall back to `DeckTheme.default()`); `textColor`,
    `accentColor`, `backgroundColor`, `codeBackground` accept `#rrggbb`;
-   `font` and `defaultBackground` are plain strings; `defaultGradient` takes
-   the same `key=value` spec as the per-slide directive. Anything omitted
-   inherits from the base template.
+   `font` and `defaultBackground` are plain strings; `lineSpacing` is a
+   number of points; `defaultGradient` takes the same `key=value` spec as the
+   per-slide directive. Anything omitted inherits from the base template.
 3. A `template=NAME` CLI argument overrides the inline choice entirely — it
    replaces the theme struct, so inline hex overrides are discarded too.
 4. If the effective template is `demo`, the deck is replaced wholesale.
@@ -122,6 +125,12 @@ scans `Fonts/` in both `Bundle.main` and `Bundle.module`. `warm` uses Georgia,
 a system font, not a bundled one.
 
 ## Gotchas
+
+- **`lineSpacing` is applied once, on `MarkdownSlide`'s `VStack`**, and reaches
+  every `Text` under it — headings, bullets, and paragraphs. `CodeBlockView`
+  resets it to `0`, since a syntax-highlighted listing has its own rhythm. It
+  adds to the leading *within* a wrapped block; the 18pt gap *between* blocks is
+  the stack's own `spacing` and is not configurable.
 
 - **Light themes need a dark `codeBackground`.** The syntax theme is a fixed
   `atom-one-dark`, so a light code background makes highlighted text

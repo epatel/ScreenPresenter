@@ -252,6 +252,7 @@ textColor: #ffffff
 accentColor: #00bfff
 backgroundColor: #05204d
 codeBackground: #001a33
+lineSpacing: 6
 defaultBackground: images/bg.jpg
 
 ---
@@ -269,6 +270,7 @@ Theme properties (`key: value`):
 | `accentColor` | Highlight color (hex) | template's |
 | `backgroundColor` | Slide background fill (hex) | template's |
 | `codeBackground` | Code block background (hex) | template's |
+| `lineSpacing` | Extra leading between lines of text, in points | `0` |
 | `defaultBackground` | Path to default background image | none |
 | `defaultGradient` | Gradient overlay for every slide (same keys as the directive) | none |
 
