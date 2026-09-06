@@ -344,7 +344,13 @@ line of text. Three choices worth not reopening:
 
 Two fallbacks: `cursor:lastline` on a slide ending in an image or code block has
 no line to follow and reverts to `.last`; on a two-column slide the cursor goes
-to the last column. Verified running. Released as `v0.10.0`.
+to the last column. Verified running.
+
+`v0.10.0` was released the same way as its predecessors. Notarization
+`Accepted`, submission `c44e85d4-2a95-49ba-8394-f50ac9eb8690`; the zip
+re-downloaded from GitHub is byte-identical to the local build
+(`c8c7c207…8eb058`), staples cleanly, and reports
+`source=Notarized Developer ID`.
 
 Next agent: nothing is mid-flight, and nothing is blocked.
 
