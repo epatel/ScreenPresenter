@@ -814,14 +814,16 @@ struct MarkdownSlide: View {
         TimelineView(.periodic(from: Self.blinkEpoch, by: Self.blinkInterval)) { ctx in
             let phase = ctx.date.timeIntervalSince(Self.blinkEpoch) / Self.blinkInterval
             let visible = staticCursor || Int(phase.rounded(.down)) % 2 == 0
-            Text(prefix + cursorRun(visible: visible, spaced: !prefix.characters.isEmpty))
+            Text(prefix + cursorRun(visible: visible))
                 .font(font(size: size))
                 .fontWeight(weight)
         }
     }
 
-    private func cursorRun(visible: Bool, spaced: Bool) -> AttributedString {
-        var run = AttributedString(spaced ? " \u{258B}" : "\u{258B}")
+    // No separating space: the cursor butts against the last character, the
+    // way a terminal draws it over the next cell rather than after a gap.
+    private func cursorRun(visible: Bool) -> AttributedString {
+        var run = AttributedString("\u{258B}")
         run.foregroundColor = visible ? theme.textColor : .clear
         return run
     }

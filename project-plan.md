@@ -54,6 +54,7 @@ are plain `.md` files that stay readable in any editor.
 - [x] `v0.9.0` released — skip directive, signed, notarized, stapled, on GitHub
 - [x] `<!-- cursor -->` — blinking cursor, below the content or on the last line
 - [x] `v0.10.0` released — cursor, signed, notarized, stapled, on GitHub
+- [x] `v0.10.1` released — `cursor:lastline` sits flush against the last word
 - [ ] Revoke the exposed app-specific password and regenerate it in `.env`
       (deferred by choice — never reached the repo, terminal output only)
 - [ ] Confirm the release zip opens cleanly after a *browser* download
@@ -345,6 +346,11 @@ line of text. Three choices worth not reopening:
 Two fallbacks: `cursor:lastline` on a slide ending in an image or code block has
 no line to follow and reverts to `.last`; on a two-column slide the cursor goes
 to the last column. Verified running.
+
+`cursor:lastline` first shipped with a separating space before the block, on the
+terminal reasoning that a cursor occupies the *next* cell. In the panel that
+read as a gap, so `v0.10.1` removed it — the cursor now butts against the last
+character.
 
 `v0.10.0` was released the same way as its predecessors. Notarization
 `Accepted`, submission `c44e85d4-2a95-49ba-8394-f50ac9eb8690`; the zip
