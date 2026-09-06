@@ -55,6 +55,7 @@ situation; they are self-contained and none references another.
 ### Features
 - [youtube-embeds](cards/youtube-embeds.md) — a video won't play, a YouTube URL isn't recognized, or you're touching the loopback server
 - [photo-folder-decks](cards/photo-folder-decks.md) — someone points the app at a directory instead of a `.md` file
+- [pdf-export](cards/pdf-export.md) — ⌘P export, or anything that has to render a slide outside the live panel
 - [config-panel](cards/config-panel.md) — the Shift-hover controls, or a font/size/shade setting behaving unexpectedly across decks
 
 ### Decisions

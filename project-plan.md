@@ -41,6 +41,8 @@ are plain `.md` files that stay readable in any editor.
 - [x] Outer margin control in the config panel, persisted across launches
 - [x] MIT `LICENSE` file — the README claimed MIT with no licence text present
 - [x] `v0.4.0` released; gradients, margin, and the animated SVG verified running
+- [x] PDF export on ⌘P — one page per slide, save panel, Finder reveal
+- [x] Clickable links in the exported PDF — prose links and YouTube thumbnails
 - [ ] Revoke the exposed app-specific password and regenerate it in `.env`
       (deferred by choice — never reached the repo, terminal output only)
 - [ ] Confirm the release zip opens cleanly after a *browser* download
@@ -125,6 +127,32 @@ larger ones lives in the decision cards under `cards/`.
   the IFrame API rejects `file://` and synthetic origins; this is why
   `NSAllowsLocalNetworking` is in `Info.plist`.
 
+- **2026-09-06** — PDF export renders through `SlideCanvas`, the slide view
+  extracted out of `PresenterContent`, rather than a second layout written for
+  export. One code path means the PDF cannot drift from the panel. Pages are
+  the panel's *current* size rather than a paper size, because font sizes here
+  are absolute — rescaling would re-flow the slide instead of preserving it.
+- **2026-09-06** — ⌘P is caught by the local `NSEvent` monitor, not by
+  `PresenterPanel.keyDown`. Command-modified keys go through the menu bar and
+  `performKeyEquivalent`, and this app has no menu, so `keyDown` never sees
+  them. The monitor (previously video-only, now `installKeyMonitor`) runs
+  ahead of the responder chain and is the only place that reliably works.
+- **2026-09-06** — SVG backgrounds are exported by snapshotting an offscreen
+  `WKWebView`, not by `NSImage`. `NSImage` loads these files without error and
+  renders them entirely black — its SVG support is for symbol-style art, not
+  gradients and filters. The web view also has to belong to a window, and the
+  wait for its callbacks has to `await Task.sleep`, not pump a `RunLoop`:
+  export runs inside a main-actor task, where run-loop pumping delivers
+  nothing and every snapshot silently times out.
+
+- **2026-09-06** — Links in the exported PDF are added in a PDFKit pass over
+  the finished file, and prose links are located by **searching the page's own
+  text** for the label rather than by measuring geometry — SwiftUI exposes no
+  per-run rects for a `Text`. That makes "the pages are real text" load-bearing
+  rather than merely nice: rasterized pages would have nothing to search.
+  YouTube thumbnails have no text, so those rects come from a `GeometryReader`
+  probe during the render pass instead.
+
 ## Current state / handoff
 
 Version 0.2.0, branch `main`, working tree clean and in sync with
@@ -183,6 +211,33 @@ absent from `.env.example` and from the shipped `.app`, so this was never a
 repo leak. Rotation is deferred by choice, not forgotten: revoke at
 appleid.apple.com and regenerate in `.env` when convenient. It grants
 notarization submission only, not account access.
+
+**PDF export (2026-09-06).** ⌘P writes the deck to a PDF chosen through a save
+panel. `SlideCanvas` was extracted from `PresenterContent` so the exporter and
+the panel share one layout; `PDFExporter`, `SVGSnapshot`, and the
+`YouTubeThumbnails` cache are new; the video key monitor became a general
+`installKeyMonitor` that also catches ⌘P. README, `sample.md`, and a new
+`cards/pdf-export.md` cover it.
+
+Links in the PDF followed: `[label](url)` (and bare URLs, which
+`AttributedString(markdown:)` autolinks) plus YouTube thumbnails, which link to
+the video with its start offset.
+
+The *rendering* is verified against `sample.md` — all 15 pages, including the
+YouTube thumbnails, the animated SVG background, gradients, syntax
+highlighting, and background photos, with the text landing as real selectable
+text. That was done through a temporary env-var export hook in the bootstrap,
+which has since been removed. What has **not** been exercised in the running
+app is the ⌘P keystroke itself, the save panel appearing above the presenter
+(the `withPanelsBelowModal` level dance), and the Finder reveal.
+
+Link annotations are verified on a scratch deck covering headings, bullets,
+two links in one paragraph, a repeated label pointing at two different URLs, a
+label wrapping across two lines, and a bare URL — each lands on exactly its own
+words, with the wrapped one getting an annotation per line. Not checked: how a
+given PDF *viewer* renders the click target, and whether prose links are
+clickable in the live panel (SwiftUI should handle it, but nobody has clicked
+one).
 
 Next agent: nothing is mid-flight, and nothing is blocked.
 

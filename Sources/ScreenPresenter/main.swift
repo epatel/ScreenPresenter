@@ -3,6 +3,7 @@ import Combine
 import CoreText
 import Highlightr
 import Network
+import PDFKit
 import SwiftUI
 import WebKit
 
@@ -605,6 +606,13 @@ struct YouTubeLink {
         return YouTubeLink(videoId: vid, start: parseDuration(t ?? ""))
     }
 
+    static func watchURL(videoId: String, start: Int) -> URL? {
+        var comps = URLComponents(string: "https://www.youtube.com/watch")
+        comps?.queryItems = [URLQueryItem(name: "v", value: videoId)]
+            + (start > 0 ? [URLQueryItem(name: "t", value: "\(start)")] : [])
+        return comps?.url
+    }
+
     // Accepts "20", "20s", "1m30s", "1h2m3s".
     static func parseDuration(_ s: String) -> Int {
         if s.isEmpty { return 0 }
@@ -798,15 +806,47 @@ struct CodeBlockView: View {
 
 // MARK: - YouTube block (thumbnail → inline player on click)
 
+// Thumbnails are cached so a slide revisited mid-deck doesn't refetch, and so
+// PDF export can render the same still the panel shows instead of a black box.
+enum YouTubeThumbnails {
+    private static let lock = NSLock()
+    private static var cache: [String: NSImage] = [:]
+
+    static func cached(_ videoId: String) -> NSImage? {
+        lock.lock(); defer { lock.unlock() }
+        return cache[videoId]
+    }
+
+    // Blocking. Called from a background queue by the panel, and from the
+    // export prefetch — never from a render pass.
+    static func fetch(_ videoId: String) -> NSImage? {
+        if let hit = cached(videoId) { return hit }
+        let candidates = [
+            "https://img.youtube.com/vi/\(videoId)/maxresdefault.jpg",
+            "https://img.youtube.com/vi/\(videoId)/hqdefault.jpg",
+        ]
+        for s in candidates {
+            guard let url = URL(string: s),
+                  let data = try? Data(contentsOf: url),
+                  let img = NSImage(data: data),
+                  img.size.width > 50 else { continue }
+            lock.lock(); cache[videoId] = img; lock.unlock()
+            return img
+        }
+        return nil
+    }
+}
+
 struct YouTubeBlock: View {
     let videoId: String
     let start: Int
     @State private var thumbnail: NSImage?
     @EnvironmentObject var videoPlayback: VideoPlayback
+    @Environment(\.linkRectCollector) private var linkRectCollector
 
     var body: some View {
         ZStack {
-            if let img = thumbnail {
+            if let img = thumbnail ?? YouTubeThumbnails.cached(videoId) {
                 Image(nsImage: img)
                     .resizable()
                     .scaledToFill()
@@ -824,27 +864,28 @@ struct YouTubeBlock: View {
         .background(Color.black)
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .contentShape(Rectangle())
+        .overlay(exportLink)
         .onTapGesture {
             videoPlayback.active = .init(videoId: videoId, start: start)
         }
         .onAppear(perform: loadThumbnail)
     }
 
+    // The thumbnail plays in-panel, so it is not a link on screen — but in a
+    // PDF there is nothing to play, and the video's page is the useful target.
+    @ViewBuilder
+    private var exportLink: some View {
+        if let collector = linkRectCollector,
+           let url = YouTubeLink.watchURL(videoId: videoId, start: start) {
+            LinkProbe(url: url, collector: collector)
+        }
+    }
+
     private func loadThumbnail() {
-        guard thumbnail == nil else { return }
-        let candidates = [
-            "https://img.youtube.com/vi/\(videoId)/maxresdefault.jpg",
-            "https://img.youtube.com/vi/\(videoId)/hqdefault.jpg",
-        ]
+        guard thumbnail == nil, YouTubeThumbnails.cached(videoId) == nil else { return }
         DispatchQueue.global(qos: .userInitiated).async {
-            for s in candidates {
-                guard let url = URL(string: s),
-                      let data = try? Data(contentsOf: url),
-                      let img = NSImage(data: data),
-                      img.size.width > 50 else { continue }
-                DispatchQueue.main.async { self.thumbnail = img }
-                return
-            }
+            guard let img = YouTubeThumbnails.fetch(videoId) else { return }
+            DispatchQueue.main.async { self.thumbnail = img }
         }
     }
 }
@@ -911,6 +952,81 @@ struct SVGBackgroundView: NSViewRepresentable {
         """
         wv.loadHTMLString(html, baseURL: url.deletingLastPathComponent())
         context.coordinator.loadedURL = url
+    }
+}
+
+// ImageRenderer captures nothing from an NSViewRepresentable, and NSImage's
+// own SVG support renders these files black (it handles symbol-style art, not
+// gradients and filters). So PDF export snapshots the same web view the panel
+// uses and caches the still. Blocking by design — it runs in the export's
+// prefetch pass, never inside a render.
+enum SVGSnapshot {
+    private static var cache: [URL: NSImage] = [:]
+
+    static func cached(_ url: URL) -> NSImage? { cache[url] }
+
+    private final class LoadWaiter: NSObject, WKNavigationDelegate {
+        var done = false
+        func webView(_ w: WKWebView, didFinish n: WKNavigation!) { done = true }
+        func webView(_ w: WKWebView, didFail n: WKNavigation!, withError e: Error) { done = true }
+        func webView(_ w: WKWebView, didFailProvisionalNavigation n: WKNavigation!, withError e: Error) { done = true }
+    }
+
+    @MainActor
+    static func capture(_ url: URL, size: CGSize) async -> NSImage? {
+        if let hit = cache[url] { return hit }
+
+        let frame = CGRect(origin: .zero, size: size)
+        let wv = WKWebView(frame: frame, configuration: WKWebViewConfiguration())
+        let waiter = LoadWaiter()
+        wv.navigationDelegate = waiter
+        // WebKit only composites a web view that belongs to a window, so park
+        // one far off any screen for the duration of the snapshot.
+        let host = NSWindow(
+            contentRect: CGRect(x: -30000, y: -30000, width: size.width, height: size.height),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        host.contentView = wv
+        host.orderFrontRegardless()
+        defer { host.orderOut(nil) }
+
+        let svg = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+        wv.loadHTMLString("""
+        <!doctype html><html><head><meta charset="utf-8"><style>
+        html,body{margin:0;padding:0;background:transparent;width:100%;height:100%;overflow:hidden}
+        svg{width:100vw;height:100vh;display:block}
+        </style></head><body>\(svg)</body></html>
+        """, baseURL: url.deletingLastPathComponent())
+
+        await settle(while: { !waiter.done }, timeout: 5)
+        // One settle beat so the first animation frame and any filter passes
+        // have actually been composited.
+        await settle(while: { true }, timeout: 0.4)
+
+        var shot: NSImage?
+        var finished = false
+        let config = WKSnapshotConfiguration()
+        config.rect = frame
+        wv.takeSnapshot(with: config) { img, _ in
+            shot = img
+            finished = true
+        }
+        await settle(while: { !finished }, timeout: 5)
+
+        if let shot { cache[url] = shot }
+        return shot
+    }
+
+    // Yields the main actor in small slices so WebKit's delegate callbacks and
+    // compositing get to run — a RunLoop pump would not, since export already
+    // runs inside a main-actor task.
+    private static func settle(while condition: () -> Bool, timeout: TimeInterval) async {
+        let deadline = Date().addingTimeInterval(timeout)
+        while condition() && Date() < deadline {
+            try? await Task.sleep(nanoseconds: 20_000_000)
+        }
     }
 }
 
@@ -1089,15 +1205,25 @@ final class CornerView: NSView {
 
 // MARK: - Presenter view (panel contents)
 
-struct PresenterContent: View {
-    @ObservedObject var state: PresenterState
-    @EnvironmentObject var settings: PresenterSettings
-    @EnvironmentObject var videoPlayback: VideoPlayback
+// The slide itself, with no dependency on PresenterState, so the PDF exporter
+// can render any slide off-screen through the same code path the panel uses.
+// `staticBackgrounds` swaps the live WKWebView for a still NSImage — SwiftUI's
+// ImageRenderer captures nothing from an NSViewRepresentable.
+struct SlideCanvas: View {
+    static let pageSpace = "slidePage"
+
+    let slide: Slide
+    let deckTheme: DeckTheme
+    let baseDir: URL
+    let shade: Double
+    let pageLabel: String
+    var cornerRadius: CGFloat = 20
+    var showsBorder: Bool = true
+    var staticBackgrounds: Bool = false
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         let bg = backgroundSource
-        let shadeAmount = settings.shade(for: state.index)
         let theme = currentTheme
         ZStack(alignment: .bottomTrailing) {
             // Background fills the whole frame. Color.clear provides the sizing;
@@ -1105,48 +1231,44 @@ struct PresenterContent: View {
             // otherwise the theme's background color.
             Color.clear
                 .background(backgroundFill(bg, theme: theme))
-                .overlay(backgroundOverlay(theme: theme, shade: shadeAmount, hasContent: bg.hasContent))
+                .overlay(backgroundOverlay(theme: theme, shade: shade, hasContent: bg.hasContent))
                 .clipShape(shape)
 
-            shape.strokeBorder(theme.textColor.opacity(0.35), lineWidth: 1.5)
+            if showsBorder {
+                shape.strokeBorder(theme.textColor.opacity(0.35), lineWidth: 1.5)
+            }
 
             columnsView
                 .foregroundStyle(theme.textColor)
                 .padding(48)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
-            Text("\(state.index + 1) / \(state.deck.slides.count)")
+            Text(pageLabel)
                 .font(.system(size: 13, design: .monospaced))
                 .foregroundStyle(theme.textColor.opacity(0.6))
                 .padding(16)
-
-            if let p = videoPlayback.active {
-                YouTubeWebView(videoId: p.videoId, start: p.start)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color.black)
-                    .clipShape(shape)
-            }
         }
         .clipShape(shape)
+        .coordinateSpace(name: Self.pageSpace)
     }
 
     @ViewBuilder
     private var columnsView: some View {
-        let cols = state.currentSlide.columns
+        let cols = slide.columns
         if cols.count > 1 {
             HStack(alignment: .top, spacing: 40) {
                 ForEach(Array(cols.enumerated()), id: \.offset) { _, col in
-                    MarkdownSlide(text: col, baseDir: state.baseDir, theme: currentTheme)
+                    MarkdownSlide(text: col, baseDir: baseDir, theme: currentTheme)
                         .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
             }
         } else {
-            MarkdownSlide(text: cols.first ?? "", baseDir: state.baseDir, theme: currentTheme)
+            MarkdownSlide(text: cols.first ?? "", baseDir: baseDir, theme: currentTheme)
         }
     }
 
     private var currentTheme: DeckTheme {
-        state.currentSlide.themeOverride ?? state.deck.theme
+        slide.themeOverride ?? deckTheme
     }
 
     // A gradient stands in for the flat darken overlay rather than stacking
@@ -1155,7 +1277,7 @@ struct PresenterContent: View {
     // so a gradient can be the background.
     @ViewBuilder
     private func backgroundOverlay(theme: DeckTheme, shade: Double, hasContent: Bool) -> some View {
-        if let gradient = state.currentSlide.gradient ?? theme.defaultGradient {
+        if let gradient = slide.gradient ?? theme.defaultGradient {
             gradient.linearGradient
         } else if hasContent {
             Color.black.opacity(shade)
@@ -1176,14 +1298,15 @@ struct PresenterContent: View {
     }
 
     private var backgroundSource: BackgroundSource {
-        let path = state.currentSlide.background ?? currentTheme.defaultBackground
+        let path = slide.background ?? currentTheme.defaultBackground
         guard let path else { return .none }
         let expanded = (path as NSString).expandingTildeInPath
         let url: URL = expanded.hasPrefix("/")
             ? URL(fileURLWithPath: expanded)
-            : state.baseDir.appendingPathComponent(expanded)
+            : baseDir.appendingPathComponent(expanded)
         if url.pathExtension.lowercased() == "svg" {
-            return .svg(url)
+            if !staticBackgrounds { return .svg(url) }
+            return SVGSnapshot.cached(url).map { .image($0) } ?? .none
         }
         return NSImage(contentsOf: url).map { .image($0) } ?? .none
     }
@@ -1198,6 +1321,285 @@ struct PresenterContent: View {
         case .svg(let url):
             SVGBackgroundView(url: url)
         }
+    }
+}
+
+struct PresenterContent: View {
+    @ObservedObject var state: PresenterState
+    @EnvironmentObject var settings: PresenterSettings
+    @EnvironmentObject var videoPlayback: VideoPlayback
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
+        ZStack {
+            SlideCanvas(
+                slide: state.currentSlide,
+                deckTheme: state.deck.theme,
+                baseDir: state.baseDir,
+                shade: settings.shade(for: state.index),
+                pageLabel: "\(state.index + 1) / \(state.deck.slides.count)"
+            )
+
+            if let p = videoPlayback.active {
+                YouTubeWebView(videoId: p.videoId, start: p.start)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color.black)
+                    .clipShape(shape)
+            }
+        }
+        .clipShape(shape)
+    }
+}
+
+// MARK: - PDF export (Cmd-P)
+
+// Rects of things that should become clickable in the exported PDF but carry
+// no text to search for — currently just YouTube thumbnails. Filled during the
+// render pass, in the page's coordinate space with y measured from the top.
+final class LinkRectCollector {
+    private(set) var links: [(rect: CGRect, url: URL)] = []
+
+    // ImageRenderer lays a page out more than once, so the same probe reports
+    // itself repeatedly; one annotation per rect is enough.
+    func add(_ rect: CGRect, _ url: URL) {
+        // Compared at whole points: repeat passes can differ in the last
+        // fractional digit, which is not a second link.
+        guard !links.contains(where: { $0.rect.integral == rect.integral && $0.url == url })
+        else { return }
+        links.append((rect, url))
+    }
+    func reset() { links.removeAll() }
+}
+
+private struct LinkRectCollectorKey: EnvironmentKey {
+    static let defaultValue: LinkRectCollector? = nil
+}
+
+extension EnvironmentValues {
+    var linkRectCollector: LinkRectCollector? {
+        get { self[LinkRectCollectorKey.self] }
+        set { self[LinkRectCollectorKey.self] = newValue }
+    }
+}
+
+// Records its own frame as a side effect of layout. onAppear and preference
+// callbacks never fire under ImageRenderer, but GeometryReader's closure is
+// evaluated during the layout it does perform.
+struct LinkProbe: View {
+    let url: URL
+    let collector: LinkRectCollector
+
+    var body: some View {
+        GeometryReader { geo in
+            record(geo.frame(in: .named(SlideCanvas.pageSpace)))
+        }
+    }
+
+    private func record(_ rect: CGRect) -> Color {
+        collector.add(rect, url)
+        return .clear
+    }
+}
+
+
+
+enum PDFExporter {
+    enum Failure: LocalizedError {
+        case cannotWrite(URL)
+
+        var errorDescription: String? {
+            switch self {
+            case .cannotWrite(let url):
+                return "Could not create a PDF at \(url.path)."
+            }
+        }
+    }
+
+    // One page per slide, at the panel's current size. Font sizes are absolute,
+    // so rescaling the page would change the layout instead of preserving it —
+    // the export matches whatever is on screen, margin included.
+    @MainActor
+    static func write(deck: Deck, settings: PresenterSettings, pageSize: CGSize, to url: URL) async throws {
+        await prefetchThumbnails(deck)
+        await prefetchSVGBackgrounds(deck, pageSize: pageSize)
+
+        var mediaBox = CGRect(origin: .zero, size: pageSize)
+        guard let consumer = CGDataConsumer(url: url as CFURL),
+              let pdf = CGContext(consumer: consumer, mediaBox: &mediaBox, nil)
+        else { throw Failure.cannotWrite(url) }
+
+        let collector = LinkRectCollector()
+        var probedLinks: [[(rect: CGRect, url: URL)]] = []
+
+        let total = deck.slides.count
+        for (i, slide) in deck.slides.enumerated() {
+            collector.reset()
+            let page = SlideCanvas(
+                slide: slide,
+                deckTheme: deck.theme,
+                baseDir: deck.baseDir,
+                shade: settings.shade(for: i),
+                pageLabel: "\(i + 1) / \(total)",
+                cornerRadius: 0,
+                showsBorder: false,
+                staticBackgrounds: true
+            )
+            .frame(width: pageSize.width, height: pageSize.height)
+            .environmentObject(settings)
+            .environmentObject(VideoPlayback())
+            .environment(\.linkRectCollector, collector)
+
+            let renderer = ImageRenderer(content: page)
+            renderer.proposedSize = ProposedViewSize(pageSize)
+            renderer.render { _, draw in
+                pdf.beginPDFPage(nil)
+                draw(pdf)
+                pdf.endPDFPage()
+            }
+            // The probes only fire once draw() has run the layout.
+            probedLinks.append(collector.links)
+        }
+        pdf.closePDF()
+
+        annotateLinks(
+            in: url,
+            probed: probedLinks,
+            text: deck.slides.map(textLinks(in:)),
+            pageHeight: pageSize.height
+        )
+    }
+
+    // Two kinds of link, both applied after the pages exist. Probed rects come
+    // from LinkProbe during the render; text links are located by searching the
+    // finished PDF, which is why the pages are written as real text rather than
+    // rasterized — SwiftUI hands out no per-run geometry for a Text.
+    private static func annotateLinks(
+        in url: URL,
+        probed: [[(rect: CGRect, url: URL)]],
+        text: [[(text: String, url: URL)]],
+        pageHeight: CGFloat
+    ) {
+        guard let doc = PDFDocument(url: url) else { return }
+        var added = false
+
+        for index in 0..<doc.pageCount {
+            guard let page = doc.page(at: index) else { continue }
+
+            for link in probed.indices.contains(index) ? probed[index] : [] {
+                // Probe rects measure y from the top of the page; PDF is y-up.
+                let bounds = CGRect(
+                    x: link.rect.minX,
+                    y: pageHeight - link.rect.maxY,
+                    width: link.rect.width,
+                    height: link.rect.height
+                )
+                annotate(page, bounds: bounds, url: link.url)
+                added = true
+            }
+
+            // Line breaks are flattened to spaces so a label that wraps is still
+            // found; the substitution is one character for one, which keeps the
+            // offsets usable as a range on the page itself.
+            let haystack = (page.string ?? "")
+                .replacingOccurrences(of: "\n", with: " ") as NSString
+            // Repeated link text on one page is paired with its URLs in reading
+            // order, so two different links sharing a label stay distinct.
+            var consumed: [String: Int] = [:]
+            for link in text.indices.contains(index) ? text[index] : [] {
+                let needle = link.text.replacingOccurrences(of: "\n", with: " ")
+                let nth = consumed[link.text, default: 0]
+                consumed[link.text] = nth + 1
+                guard let range = haystack.range(of: needle, occurrence: nth),
+                      let selection = page.selection(for: range) else { continue }
+                // A wrapped link needs one annotation per line it occupies.
+                for line in selection.selectionsByLine() {
+                    annotate(page, bounds: line.bounds(for: page), url: link.url)
+                    added = true
+                }
+            }
+        }
+
+        if added { doc.write(to: url) }
+    }
+
+    private static func annotate(_ page: PDFPage, bounds: CGRect, url: URL) {
+        let annotation = PDFAnnotation(bounds: bounds, forType: .link, withProperties: nil)
+        annotation.action = PDFActionURL(url: url)
+        // Some viewers outline a link annotation unless the border is empty.
+        let border = PDFBorder()
+        border.lineWidth = 0
+        annotation.border = border
+        page.addAnnotation(annotation)
+    }
+
+    // Every markdown link in a slide's prose, in reading order.
+    private static func textLinks(in slide: Slide) -> [(text: String, url: URL)] {
+        slide.columns
+            .flatMap { MarkdownSlide.parse($0) }
+            .flatMap { block -> [(text: String, url: URL)] in
+                let source: String
+                switch block {
+                case .heading(_, let s), .bullet(let s), .paragraph(let s):
+                    source = s
+                default:
+                    return []
+                }
+                guard let attributed = try? AttributedString(markdown: source) else { return [] }
+                return attributed.runs.compactMap { run in
+                    guard let link = run.link else { return nil }
+                    let label = String(attributed[run.range].characters)
+                    return label.isEmpty ? nil : (label, link)
+                }
+            }
+    }
+
+    @MainActor
+    private static func prefetchSVGBackgrounds(_ deck: Deck, pageSize: CGSize) async {
+        let paths = deck.slides.map { $0.background ?? $0.themeOverride?.defaultBackground ?? deck.theme.defaultBackground }
+        for path in paths.compactMap({ $0 }) {
+            let expanded = (path as NSString).expandingTildeInPath
+            let url = expanded.hasPrefix("/")
+                ? URL(fileURLWithPath: expanded)
+                : deck.baseDir.appendingPathComponent(expanded)
+            guard url.pathExtension.lowercased() == "svg" else { continue }
+            _ = await SVGSnapshot.capture(url, size: pageSize)
+        }
+    }
+
+    // A YouTube block draws whatever thumbnail is cached, and the panel's async
+    // loader never runs under ImageRenderer — so warm the cache first or every
+    // video slide exports as a black rectangle.
+    private static func prefetchThumbnails(_ deck: Deck) async {
+        let ids = deck.slides
+            .flatMap { $0.columns }
+            .flatMap { MarkdownSlide.parse($0) }
+            .compactMap { block -> String? in
+                if case .youtube(let videoId, _, _) = block { return videoId }
+                return nil
+            }
+        let unique = Array(Set(ids))
+        await Task.detached {
+            for id in unique { _ = YouTubeThumbnails.fetch(id) }
+        }.value
+    }
+}
+
+private extension NSString {
+    func range(of needle: String, occurrence: Int) -> NSRange? {
+        var start = 0
+        var remaining = occurrence
+        while start <= length {
+            let found = range(
+                of: needle,
+                options: [.literal],
+                range: NSRange(location: start, length: length - start)
+            )
+            guard found.location != NSNotFound else { return nil }
+            if remaining == 0 { return found }
+            remaining -= 1
+            start = found.location + max(found.length, 1)
+        }
+        return nil
     }
 }
 
@@ -1342,12 +1744,14 @@ final class Controller: NSObject, NSWindowDelegate {
     var backdrop: NSWindow!
     var corner: NSWindow!
     var mouseMonitor: Any?
-    var videoKeyMonitor: Any?
+    var keyMonitor: Any?
     var isShown = false
+    private var deckPath: String
 
-    init(deck: Deck) {
+    init(deck: Deck, path: String) {
         self.state = PresenterState(deck: deck)
         self.settings.theme = deck.theme
+        self.deckPath = path
     }
 
     func start() {
@@ -1388,6 +1792,7 @@ final class Controller: NSObject, NSWindowDelegate {
                 settings.setShade(0, for: i)
             }
         }
+        deckPath = url.path
         UserDefaults.standard.set(url.path, forKey: "lastDeckPath")
         NSLog("ScreenPresenter: loaded deck \(url.lastPathComponent) with \(newDeck.slides.count) slides (theme: \(newDeck.theme.templateName))")
         // Show the presenter immediately so the user sees the result of the drop.
@@ -1502,18 +1907,25 @@ final class Controller: NSObject, NSWindowDelegate {
         NSApp.activate(ignoringOtherApps: true)
         backdrop.orderFront(nil)
         panel.makeKeyAndOrderFront(nil)
-        installVideoKeyMonitor()
+        installKeyMonitor()
         if withConfig { showConfigPanel() }
     }
 
     // WKWebView captures keyDown when it's first responder, so PresenterPanel's
-    // keyDown override doesn't fire while a video is playing. A local event
-    // monitor runs ahead of the responder chain and intercepts keys only when
-    // a video overlay is active.
-    private func installVideoKeyMonitor() {
-        if videoKeyMonitor != nil { return }
-        videoKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self = self, self.videoPlayback.active != nil else { return event }
+    // keyDown override doesn't fire while a video is playing; and command-key
+    // events never reach it at all without a menu. A local event monitor runs
+    // ahead of the responder chain and covers both.
+    private func installKeyMonitor() {
+        if keyMonitor != nil { return }
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self = self else { return event }
+            if event.modifierFlags.contains(.command),
+               event.charactersIgnoringModifiers?.lowercased() == "p" {
+                // Off this event's stack — exportPDF runs a modal save panel.
+                Task { @MainActor in await self.exportPDF() }
+                return nil
+            }
+            guard self.videoPlayback.active != nil else { return event }
             switch event.keyCode {
             case 53:  // escape — close the video, keep the slide
                 self.videoPlayback.active = nil
@@ -1532,10 +1944,10 @@ final class Controller: NSObject, NSWindowDelegate {
         }
     }
 
-    private func removeVideoKeyMonitor() {
-        if let m = videoKeyMonitor {
+    private func removeKeyMonitor() {
+        if let m = keyMonitor {
             NSEvent.removeMonitor(m)
-            videoKeyMonitor = nil
+            keyMonitor = nil
         }
     }
 
@@ -1561,7 +1973,7 @@ final class Controller: NSObject, NSWindowDelegate {
         guard isShown else { return }
         isShown = false
         videoPlayback.active = nil
-        removeVideoKeyMonitor()
+        removeKeyMonitor()
         panel.orderOut(nil)
         backdrop.orderOut(nil)
         configPanel?.orderOut(nil)
@@ -1633,6 +2045,50 @@ final class Controller: NSObject, NSWindowDelegate {
         layoutWithConfig(panelSize: panelBaseSize)
     }
 
+    // Cmd-P. The panels sit at .floating, which is above the save panel, so
+    // they're dropped to .normal for the duration of the modal and restored
+    // after — hiding the deck instead would lose the current slide.
+    @MainActor
+    private func exportPDF() async {
+        guard isShown else { return }
+        videoPlayback.active = nil
+
+        let save = NSSavePanel()
+        save.allowedContentTypes = [.pdf]
+        save.nameFieldStringValue = URL(fileURLWithPath: deckPath)
+            .deletingPathExtension()
+            .lastPathComponent + ".pdf"
+        save.canCreateDirectories = true
+
+        let response = withPanelsBelowModal { save.runModal() }
+        guard response == .OK, let url = save.url else { return }
+
+        let size = panel.frame.size
+        do {
+            try await PDFExporter.write(
+                deck: state.deck,
+                settings: settings,
+                pageSize: CGSize(width: round(size.width), height: round(size.height)),
+                to: url
+            )
+            NSLog("ScreenPresenter: exported \(state.deck.slides.count) slides to \(url.path)")
+            NSWorkspace.shared.activateFileViewerSelecting([url])
+        } catch {
+            let alert = NSAlert()
+            alert.messageText = "PDF export failed"
+            alert.informativeText = error.localizedDescription
+            _ = withPanelsBelowModal { alert.runModal() }
+        }
+    }
+
+    private func withPanelsBelowModal<T>(_ body: () -> T) -> T {
+        let windows = [panel, backdrop, configPanel].compactMap { $0 }
+        let levels = windows.map { $0.level }
+        windows.forEach { $0.level = .normal }
+        defer { zip(windows, levels).forEach { $0.level = $1 } }
+        return body()
+    }
+
     private func handleKey(_ code: UInt16) {
         switch code {
         case 49, 124, 36:                            // space, right arrow, return
@@ -1686,7 +2142,7 @@ FontLoader.registerBundledFonts()
 let app = NSApplication.shared
 app.setActivationPolicy(.accessory)
 
-let controller = Controller(deck: deck)
+let controller = Controller(deck: deck, path: resolvedPath)
 let delegate = AppDelegateShim(controller: controller)
 app.delegate = delegate
 app.run()

@@ -18,6 +18,7 @@ a dimmed backdrop with no menus, toolbars, or window chrome.
 - **10 bundled themes** (`## Theme` section in markdown, or `template=NAME` flag) plus per-key color/font overrides
 - Five bundled Google Fonts (Inter, Space Grotesk, Merriweather, Playfair Display, JetBrains Mono)
 - **Shift-hover** opens a live-config panel: font family, font size, per-slide shade, and outer margin
+- **⌘P exports the deck as a PDF** — one page per slide, selectable text, clickable links
 - **Drop a `.md` file** onto the app in Finder to load it
 - Remembers the last viewed slide between opens
 
@@ -85,8 +86,25 @@ declare one.
 | Esc, click outside | Dismiss |
 | Esc (while a video is playing) | Close the video, stay on the slide |
 | Space / ← / → (while a video is playing) | Close the video and navigate |
+| ⌘P | Export the deck as a PDF |
 | Shift while hovering corner | Open with config panel |
 | ⌘Q (while config panel is focused) | Quit |
+
+## PDF export
+
+Press **⌘P** while the presenter is open. A save panel appears, and the deck is
+written as one page per slide at the panel's current size — so the exported
+pages match what is on screen, outer margin and all.
+
+Everything the panel draws is exported: backgrounds, gradients, per-slide
+shade, columns, syntax-highlighted code, and images. Text stays real text in
+the PDF rather than a picture of text. Two things are stills rather than live
+views — a YouTube slide exports as its thumbnail with the play badge, and an
+animated `.svg` background exports as a single frame.
+
+Links stay clickable. A `[label](url)` is a link on the page it lands on, and
+keeps working when the label wraps across two lines; a YouTube thumbnail
+becomes a link to the video, start offset included.
 
 ## Markdown syntax
 

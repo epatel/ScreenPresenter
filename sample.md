@@ -13,6 +13,7 @@ Move your mouse to the **top-right corner** to open.
 - **Space** or **→** — next slide
 - **←** — previous slide
 - **Esc** or click outside — dismiss
+- **⌘P** — export this deck as a PDF
 * Hold **Shift** while hovering the corner for live settings
 
 Bullets take `-` or `*`.
