@@ -56,6 +56,14 @@ Paths are relative to the `.md` file.
 
 ---
 
+## Slideshow
+
+![tap dance](images/Clumsy tap dancer in action.png, images/Predator's awkward tap dance showdown.png)
+
+Comma-separated paths cross-fade in place, in the aspect of the largest image.
+
+---
+
 ## YouTube
 
 ![GPT5.5](https://youtu.be/tNV9_I-zLO0?t=20)

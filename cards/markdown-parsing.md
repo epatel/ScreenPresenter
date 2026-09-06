@@ -64,6 +64,7 @@ enum Block {
     case bullet(String)
     case paragraph(String)
     case image(alt: String, path: String)
+    case slideshow(alt: String, paths: [String])
     case youtube(videoId: String, start: Int, alt: String)
     case code(language: String, source: String)
     case blank
@@ -77,8 +78,10 @@ Matching order matters — it is checked top to bottom:
    line starting with ` ``` ` is captured verbatim. **An unterminated fence
    swallows the rest of the column.**
 2. `parseImage` regex `^\s*!\[([^\]]*)\]\(([^)]+)\)\s*$` — the image must be
-   alone on its line. If the captured path parses as a YouTube URL it becomes
-   `.youtube`, otherwise `.image`.
+   alone on its line. The captured path then goes through `splitPaths`: two or
+   more comma-separated, all-non-empty pieces become a `.slideshow`; otherwise
+   a YouTube URL becomes `.youtube` and anything else `.image`. A path that
+   itself contains a comma will be misread as two paths — rename the file.
 3. `# `, `## `, `### ` prefixes → headings. Checked against the **untrimmed**
    line, so a leading space defeats them. Four or more `#` is not a heading.
 4. `- ` or `* ` prefix → bullet. Also untrimmed, so nested/indented bullets

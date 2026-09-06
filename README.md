@@ -120,6 +120,8 @@ Regular paragraph with **bold**, *italic*, and `inline code`.
 
 ![caption](images/photo.png)
 
+![gallery](images/one.png, images/two.png)
+
 ![talk](https://youtu.be/ID?t=20)
 
 ---                   <- slide separator
@@ -149,6 +151,7 @@ Supported directives:
 | `<!-- gradient: ... -->` | Per-slide gradient overlay (see below) |
 | ` ```lang ` fenced block | Syntax-highlighted code |
 | `![alt](path)` | Image — path relative to the `.md` file, absolute, or `~/...` |
+| `![alt](a.png, b.png)` | Slideshow — cross-fades between the images in place |
 | `![alt](<url>)` | YouTube — URL forms listed below |
 
 ### Block vs. inline syntax

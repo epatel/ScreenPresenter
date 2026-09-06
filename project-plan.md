@@ -44,6 +44,8 @@ are plain `.md` files that stay readable in any editor.
 - [x] PDF export on ⌘P — one page per slide, save panel, Finder reveal
 - [x] Clickable links in the exported PDF — prose links and YouTube thumbnails
 - [x] `v0.5.0` released — PDF export, signed, notarized, stapled, on GitHub
+- [x] Image slideshows — `![alt](a.png, b.png)` cross-fades between images
+- [x] `v0.6.0` released — slideshows, signed, notarized, stapled, on GitHub
 - [ ] Revoke the exposed app-specific password and regenerate it in `.env`
       (deferred by choice — never reached the repo, terminal output only)
 - [ ] Confirm the release zip opens cleanly after a *browser* download
@@ -248,6 +250,21 @@ byte-identical to the local build (`5bd377b1…b2de6`), staples cleanly, and
 reports `source=Notarized Developer ID`. Note that it shipped with the ⌘P
 keystroke itself still unexercised by a human — the export was verified through
 code, not through the key.
+
+**Image slideshows (2026-09-06).** `![alt](a.png, b.png)` — two or more
+comma-separated paths in one image directive — becomes a `.slideshow` block that
+cross-fades between the images every 4s over 1.2s. New `SlideshowBlock` view,
+new `MarkdownSlide.splitPaths`, and `loadImage` now caches by URL (the block
+list is rebuilt on every body pass, so a ticking slideshow would otherwise
+re-decode its images constantly). The frame is pinned to the aspect ratio of the
+largest image so the slide layout does not jump as it cycles. In a PDF export
+the timer never fires, so page one of a slideshow is its first image — accepted,
+not a bug. `sample.md` gained a "Slideshow" slide; README table and
+`cards/markdown-parsing.md` updated.
+
+**Verified running (2026-09-06).** The slideshow was watched in the app: the
+images cross-fade, the frame stays put across the switch, and the 4s/1.2s
+timing was accepted as-is. Released as `v0.6.0`.
 
 Next agent: nothing is mid-flight, and nothing is blocked.
 

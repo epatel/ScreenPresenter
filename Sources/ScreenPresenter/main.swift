@@ -570,6 +570,7 @@ enum Block {
     case bullet(String)
     case paragraph(String)
     case image(alt: String, path: String)
+    case slideshow(alt: String, paths: [String])
     case youtube(videoId: String, start: Int, alt: String)
     case code(language: String, source: String)
     case blank
@@ -693,6 +694,15 @@ struct MarkdownSlide: View {
                     .font(.system(size: 16, design: .monospaced))
                     .foregroundStyle(.red.opacity(0.8))
             }
+        case .slideshow(_, let paths):
+            let images = paths.compactMap { loadImage($0) }
+            if images.isEmpty {
+                Text("[missing images: \(paths.joined(separator: ", "))]")
+                    .font(.system(size: 16, design: .monospaced))
+                    .foregroundStyle(.red.opacity(0.8))
+            } else {
+                SlideshowBlock(images: images)
+            }
         case .youtube(let vid, let start, _):
             YouTubeBlock(videoId: vid, start: start)
         case .code(let lang, let source):
@@ -704,12 +714,19 @@ struct MarkdownSlide: View {
         (try? AttributedString(markdown: s)) ?? AttributedString(s)
     }
 
+    // Cached because the block list is rebuilt on every body pass, and a
+    // slideshow would otherwise re-decode each of its images on every tick.
+    private static var imageCache: [URL: NSImage] = [:]
+
     private func loadImage(_ path: String) -> NSImage? {
         let expanded = (path as NSString).expandingTildeInPath
         let url: URL = expanded.hasPrefix("/")
             ? URL(fileURLWithPath: expanded)
             : baseDir.appendingPathComponent(expanded)
-        return NSImage(contentsOf: url)
+        if let hit = Self.imageCache[url] { return hit }
+        guard let img = NSImage(contentsOf: url) else { return nil }
+        Self.imageCache[url] = img
+        return img
     }
 
     static func parse(_ text: String) -> [Block] {
@@ -735,7 +752,10 @@ struct MarkdownSlide: View {
                 continue
             }
             if let img = parseImage(line) {
-                if let yt = YouTubeLink.from(img.path) {
+                let paths = splitPaths(img.path)
+                if paths.count > 1 {
+                    blocks.append(.slideshow(alt: img.alt, paths: paths))
+                } else if let yt = YouTubeLink.from(img.path) {
                     blocks.append(.youtube(videoId: yt.videoId, start: yt.start, alt: img.alt))
                 } else {
                     blocks.append(.image(alt: img.alt, path: img.path))
@@ -766,6 +786,56 @@ struct MarkdownSlide: View {
               let altR = Range(m.range(at: 1), in: line),
               let pathR = Range(m.range(at: 2), in: line) else { return nil }
         return (String(line[altR]), String(line[pathR]))
+    }
+
+    // `![alt](a.png, b.png)` is a slideshow. Split only when every comma
+    // separated piece is non-empty, so a lone path containing a comma stays one
+    // path.
+    static func splitPaths(_ spec: String) -> [String] {
+        let parts = spec
+            .components(separatedBy: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+        guard parts.count > 1, !parts.contains(where: { $0.isEmpty }) else { return [spec] }
+        return parts
+    }
+}
+
+// Cross-fades between images in place. The frame is fixed to the aspect ratio
+// of the largest image so the slide's layout does not jump as it cycles;
+// smaller or differently shaped images fit inside it.
+struct SlideshowBlock: View {
+    let images: [NSImage]
+    var interval: TimeInterval = 4
+    var fade: TimeInterval = 1.2
+
+    @State private var index = 0
+
+    private var aspect: CGFloat {
+        let largest = images.max {
+            $0.size.width * $0.size.height < $1.size.width * $1.size.height
+        }
+        guard let size = largest?.size, size.width > 0, size.height > 0 else { return 16.0 / 9.0 }
+        return size.width / size.height
+    }
+
+    var body: some View {
+        ZStack {
+            ForEach(Array(images.enumerated()), id: \.offset) { i, img in
+                Image(nsImage: img)
+                    .resizable()
+                    .scaledToFit()
+                    .opacity(i == index ? 1 : 0)
+            }
+        }
+        .aspectRatio(aspect, contentMode: .fit)
+        .frame(maxWidth: .infinity)
+        .cornerRadius(8)
+        .onReceive(Timer.publish(every: interval, on: .main, in: .common).autoconnect()) { _ in
+            guard images.count > 1 else { return }
+            withAnimation(.easeInOut(duration: fade)) {
+                index = (index + 1) % images.count
+            }
+        }
     }
 }
 
