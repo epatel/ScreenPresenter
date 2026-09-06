@@ -284,7 +284,12 @@ cleanly, and reports `source=Notarized Developer ID`.
 
 **Comments (2026-09-06).** Verified running: the comment above the Slideshow
 slide in `sample.md` does not render, and the `bg:`/`gradient:` slides still
-take their directives. Released as `v0.7.0`.
+take their directives.
+
+`v0.7.0` was released the same way as its predecessors. Notarization `Accepted`,
+submission `5f16e729-0124-4f60-a8ea-6904f4ffc1d9`; the zip re-downloaded from
+GitHub is byte-identical to the local build (`343c5f4c…449233`), staples
+cleanly, and reports `source=Notarized Developer ID`.
 
 Next agent: nothing is mid-flight, and nothing is blocked.
 
