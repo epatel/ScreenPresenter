@@ -317,7 +317,12 @@ slide is skipped the deck falls back to a single placeholder rather than being
 empty. `sample.md` carries a skipped slide; a stale bullet in
 `cards/markdown-parsing.md` (claiming unrecognized comments render as literal
 paragraphs — untrue since `v0.7.0`) was corrected at the same time. Verified
-running. Released as `v0.9.0`.
+running.
+
+`v0.9.0` was released the same way as its predecessors. Notarization `Accepted`,
+submission `f5c71dfe-bbff-4016-8e17-fec55ba31d7a`; the zip re-downloaded from
+GitHub is byte-identical to the local build (`6fd80287…b53ec9`), staples
+cleanly, and reports `source=Notarized Developer ID`.
 
 Next agent: nothing is mid-flight, and nothing is blocked.
 
