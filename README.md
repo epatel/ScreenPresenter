@@ -150,6 +150,8 @@ Supported directives:
 | `<!-- bg: path -->` | Per-slide background image (raster or `.svg`) |
 | `<!-- gradient: ... -->` | Per-slide gradient overlay (see below) |
 | `<!-- skip -->` | Drop the slide from the deck entirely |
+| `<!-- cursor -->` | Blinking cursor on its own line below the content |
+| `<!-- cursor:lastline -->` | Blinking cursor at the end of the last line of text |
 | `<!-- anything else -->` | Comment — not rendered |
 | ` ```lang ` fenced block | Syntax-highlighted code |
 | `![alt](path)` | Image — path relative to the `.md` file, absolute, or `~/...` |

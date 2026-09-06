@@ -52,6 +52,8 @@ are plain `.md` files that stay readable in any editor.
 - [x] `v0.8.0` released — lineSpacing, signed, notarized, stapled, on GitHub
 - [x] `<!-- skip -->` drops a slide from the deck entirely
 - [x] `v0.9.0` released — skip directive, signed, notarized, stapled, on GitHub
+- [x] `<!-- cursor -->` — blinking cursor, below the content or on the last line
+- [x] `v0.10.0` released — cursor, signed, notarized, stapled, on GitHub
 - [ ] Revoke the exposed app-specific password and regenerate it in `.env`
       (deferred by choice — never reached the repo, terminal output only)
 - [ ] Confirm the release zip opens cleanly after a *browser* download
@@ -323,6 +325,26 @@ running.
 submission `f5c71dfe-bbff-4016-8e17-fec55ba31d7a`; the zip re-downloaded from
 GitHub is byte-identical to the local build (`6fd80287…b53ec9`), staples
 cleanly, and reports `source=Notarized Developer ID`.
+
+**`<!-- cursor -->` (2026-09-06).** A blinking cursor, in two placements:
+`cursor:last` (the default, and what the bare directive means) puts it on its
+own line below the content; `cursor:lastline` appends it to the end of the last
+line of text. Three choices worth not reopening:
+
+- The blink is a `TimelineView(.periodic)` around **only the block carrying the
+  cursor**. A `@State` + `Timer` on the slide would re-run `Slide.parse` twice a
+  second for every deck, cursor or not.
+- The cursor is an `AttributedString` run appended to that block's text, toggled
+  between `theme.textColor` and `.clear`. Keeping it *inside* the text run is
+  what puts `cursor:lastline` on the last **visual** line of a wrapped
+  paragraph; an adjacent view in an `HStack` would sit beside the whole block.
+- `staticCursor`, threaded from `SlideCanvas.staticBackgrounds`, draws it solid
+  in a PDF export rather than catching whichever half of the cycle the render
+  lands in.
+
+Two fallbacks: `cursor:lastline` on a slide ending in an image or code block has
+no line to follow and reverts to `.last`; on a two-column slide the cursor goes
+to the last column. Verified running. Released as `v0.10.0`.
 
 Next agent: nothing is mid-flight, and nothing is blocked.
 

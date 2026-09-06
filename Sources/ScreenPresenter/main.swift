@@ -220,17 +220,30 @@ struct DeckTheme {
 
 // MARK: - Slide model
 
+// Where `<!-- cursor -->` puts its blinking block: on its own line below the
+// content, or appended to the last line of text.
+enum SlideCursor: String {
+    case last
+    case lastLine = "lastline"
+
+    static func parse(_ spec: String) -> SlideCursor {
+        SlideCursor(rawValue: spec.trimmingCharacters(in: .whitespaces).lowercased()) ?? .last
+    }
+}
+
 struct Slide {
     let background: String?
     let columns: [String]
     let themeOverride: DeckTheme?
     var gradient: SlideGradient? = nil
     var skipped: Bool = false
+    var cursor: SlideCursor? = nil
 
     static func parse(_ raw: String) -> Slide {
         var bg: String?
         var gradient: SlideGradient?
         var skipped = false
+        var cursor: SlideCursor?
         var kept: [String] = []
         var pending: [String] = []
 
@@ -248,6 +261,14 @@ struct Slide {
             }
             if t.lowercased() == "skip" {
                 skipped = true
+                return true
+            }
+            if t.lowercased() == "cursor" {
+                cursor = .last
+                return true
+            }
+            if t.lowercased().hasPrefix("cursor:") {
+                cursor = SlideCursor.parse(String(t.dropFirst(7)))
                 return true
             }
             return false
@@ -298,7 +319,8 @@ struct Slide {
             columns: cols,
             themeOverride: nil,
             gradient: gradient,
-            skipped: skipped
+            skipped: skipped,
+            cursor: cursor
         )
     }
 }
@@ -668,14 +690,24 @@ struct MarkdownSlide: View {
     let text: String
     let baseDir: URL
     let theme: DeckTheme
+    var cursor: SlideCursor? = nil
+    // A blinking cursor has nothing to blink to in a PDF, so an export draws it
+    // solid instead of catching whichever half of the cycle it lands in.
+    var staticCursor: Bool = false
     @EnvironmentObject var settings: PresenterSettings
+
+    private static let blinkInterval: TimeInterval = 0.55
+    private static let blinkEpoch = Date()
 
     var body: some View {
         // lineSpacing on the stack reaches every Text below it; CodeBlockView
         // resets it, since a listing has its own rhythm.
         VStack(alignment: .leading, spacing: 18) {
-            ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
-                render(block: block)
+            ForEach(Array(blocks.enumerated()), id: \.offset) { i, block in
+                render(block: block, cursor: i == inlineCursorIndex)
+            }
+            if showsTrailingCursor {
+                blinking(AttributedString(), size: base, weight: nil)
             }
             Spacer(minLength: 0)
         }
@@ -684,6 +716,23 @@ struct MarkdownSlide: View {
     }
 
     private var blocks: [Block] { Self.parse(text) }
+
+    // `.lastLine` needs a block whose text the cursor can follow. Images and
+    // code blocks have none, so a slide ending in one falls back to `.last`.
+    private var inlineCursorIndex: Int? {
+        guard cursor == .lastLine else { return nil }
+        return blocks.lastIndex {
+            switch $0 {
+            case .heading, .bullet, .paragraph: return true
+            default: return false
+            }
+        }
+    }
+
+    private var showsTrailingCursor: Bool {
+        guard let cursor else { return false }
+        return cursor == .last || inlineCursorIndex == nil
+    }
 
     private var base: CGFloat { settings.baseFontSize }
 
@@ -696,21 +745,21 @@ struct MarkdownSlide: View {
     }
 
     @ViewBuilder
-    private func render(block: Block) -> some View {
+    private func render(block: Block, cursor: Bool = false) -> some View {
         switch block {
         case .heading(1, let s):
-            Text(inline(s)).font(font(size: base * 2.33)).fontWeight(.bold)
+            styled(s, size: base * 2.33, weight: .bold, cursor: cursor)
         case .heading(2, let s):
-            Text(inline(s)).font(font(size: base * 1.67)).fontWeight(.semibold)
+            styled(s, size: base * 1.67, weight: .semibold, cursor: cursor)
         case .heading(_, let s):
-            Text(inline(s)).font(font(size: base * 1.25)).fontWeight(.semibold)
+            styled(s, size: base * 1.25, weight: .semibold, cursor: cursor)
         case .bullet(let s):
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Text("•").font(font(size: base))
-                Text(inline(s)).font(font(size: base))
+                styled(s, size: base, weight: nil, cursor: cursor)
             }
         case .paragraph(let s):
-            Text(inline(s)).font(font(size: base))
+            styled(s, size: base, weight: nil, cursor: cursor)
         case .blank:
             Spacer().frame(height: 8)
         case .image(_, let path):
@@ -743,6 +792,38 @@ struct MarkdownSlide: View {
 
     private func inline(_ s: String) -> AttributedString {
         (try? AttributedString(markdown: s)) ?? AttributedString(s)
+    }
+
+    @ViewBuilder
+    private func styled(
+        _ s: String, size: CGFloat, weight: Font.Weight?, cursor: Bool
+    ) -> some View {
+        if cursor {
+            blinking(inline(s), size: size, weight: weight)
+        } else {
+            Text(inline(s)).font(font(size: size)).fontWeight(weight)
+        }
+    }
+
+    // Only the one block carrying the cursor redraws on each tick, and the
+    // cursor stays inside the text run so a wrapped paragraph keeps it on the
+    // last visual line.
+    private func blinking(
+        _ prefix: AttributedString, size: CGFloat, weight: Font.Weight?
+    ) -> some View {
+        TimelineView(.periodic(from: Self.blinkEpoch, by: Self.blinkInterval)) { ctx in
+            let phase = ctx.date.timeIntervalSince(Self.blinkEpoch) / Self.blinkInterval
+            let visible = staticCursor || Int(phase.rounded(.down)) % 2 == 0
+            Text(prefix + cursorRun(visible: visible, spaced: !prefix.characters.isEmpty))
+                .font(font(size: size))
+                .fontWeight(weight)
+        }
+    }
+
+    private func cursorRun(visible: Bool, spaced: Bool) -> AttributedString {
+        var run = AttributedString(spaced ? " \u{258B}" : "\u{258B}")
+        run.foregroundColor = visible ? theme.textColor : .clear
+        return run
     }
 
     // Cached because the block list is rebuilt on every body pass, and a
@@ -1359,13 +1440,27 @@ struct SlideCanvas: View {
         let cols = slide.columns
         if cols.count > 1 {
             HStack(alignment: .top, spacing: 40) {
-                ForEach(Array(cols.enumerated()), id: \.offset) { _, col in
-                    MarkdownSlide(text: col, baseDir: baseDir, theme: currentTheme)
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                ForEach(Array(cols.enumerated()), id: \.offset) { i, col in
+                    // The cursor ends the slide, so on a split slide it belongs
+                    // to the last column.
+                    MarkdownSlide(
+                        text: col,
+                        baseDir: baseDir,
+                        theme: currentTheme,
+                        cursor: i == cols.count - 1 ? slide.cursor : nil,
+                        staticCursor: staticBackgrounds
+                    )
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
             }
         } else {
-            MarkdownSlide(text: cols.first ?? "", baseDir: baseDir, theme: currentTheme)
+            MarkdownSlide(
+                text: cols.first ?? "",
+                baseDir: baseDir,
+                theme: currentTheme,
+                cursor: slide.cursor,
+                staticCursor: staticBackgrounds
+            )
         }
     }
 

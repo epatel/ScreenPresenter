@@ -34,6 +34,23 @@ Inline styling is full markdown: **bold**, *italic*, `inline code`,
 
 ---
 
+<!-- cursor -->
+
+## Blinking cursor
+
+`<!-- cursor -->` parks a blinking block on its own line below the content.
+
+---
+
+<!-- cursor:lastline -->
+
+## Cursor on the last line
+
+`<!-- cursor:lastline -->` appends it to the end of the last line of text
+instead — even when that line wraps.
+
+---
+
 ## Two-column slide
 
 Use `|||` on its own line to split a slide.

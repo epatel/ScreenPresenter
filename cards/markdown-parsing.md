@@ -54,6 +54,8 @@ Directive rules, all of which matter:
 - A closed comment that **no directive claims is dropped**. That is what makes
   `<!-- note -->` a plain comment. (Before `v0.7.0` such comments rendered as
   literal paragraphs and there was no comment syntax at all.)
+- `<!-- cursor -->` (equivalently `cursor:last`) and `<!-- cursor:lastline -->`
+  set `cursor: SlideCursor?`. An unrecognized argument falls back to `.last`.
 - `<!-- skip -->` marks the slide `skipped`, and `Deck.load` filters those out
   before building the `Deck` — so page labels and PDF pages count only the
   slides actually shown. If *every* slide is skipped the deck falls back to a
@@ -121,11 +123,29 @@ narrow, inline syntax is delegated and broad.
 | `<!-- bg: path -->` | Per-slide background image |
 | `<!-- gradient: k=v ... -->` | Per-slide gradient overlay |
 | `<!-- skip -->` | Drop the slide from the deck entirely |
+| `<!-- cursor -->` | Blinking cursor below the content (`cursor:last`) |
+| `<!-- cursor:lastline -->` | Blinking cursor at the end of the last line |
 | `<!-- anything else -->` | Comment — dropped, never rendered |
 | ` ```lang ` fence | Syntax-highlighted code block |
 | `![alt](path)` | Image, alone on its line |
 | `![alt](youtube-url)` | YouTube embed, alone on its line |
 | `## Theme` block, first slide only | Deck theme configuration |
+
+## The blinking cursor
+
+`MarkdownSlide` draws it, and two details are load-bearing:
+
+- The blink is a `TimelineView(.periodic)` wrapped around **only the block that
+  carries the cursor**, not the slide. A `@State` + `Timer` on the slide would
+  re-run `Self.parse(text)` twice a second for every deck.
+- The cursor is an `AttributedString` run appended to that block's text, toggled
+  between `theme.textColor` and `.clear`. Keeping it inside the text run is what
+  puts `cursor:lastline` on the last *visual* line of a wrapped paragraph — an
+  adjacent view in an `HStack` would sit beside the whole block instead.
+- `staticCursor` (set from `SlideCanvas.staticBackgrounds`) draws it solid, so a
+  PDF export does not catch whichever half of the blink cycle it lands in.
+- `cursor:lastline` needs a heading, bullet, or paragraph to follow. A slide
+  ending in an image or code block has none, so it falls back to `.last`.
 
 ## Image path resolution
 
