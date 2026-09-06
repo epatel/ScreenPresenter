@@ -257,18 +257,20 @@ struct Slide {
             if !pending.isEmpty {
                 pending.append(line)
                 if t.hasSuffix("-->") {
-                    if !consume(stripDelimiters(pending.joined(separator: "\n"))) {
-                        kept.append(contentsOf: pending)
-                    }
+                    _ = consume(stripDelimiters(pending.joined(separator: "\n")))
                     pending.removeAll()
                 }
                 continue
             }
-            // Only a line that *starts* with the delimiter is a directive, so
-            // `<!-- bg: path -->` quoted mid-sentence in prose stays inert.
+            // Only a line that *starts* with the delimiter is a directive or a
+            // comment, so `<!-- bg: path -->` quoted mid-sentence in prose stays
+            // inert. A closed comment the directives do not claim is dropped
+            // rather than rendered — that is how `<!-- note -->` works as a
+            // plain comment.
             if t.hasPrefix("<!--") {
                 if t.hasSuffix("-->") {
-                    if consume(stripDelimiters(t)) { continue }
+                    _ = consume(stripDelimiters(t))
+                    continue
                 } else {
                     pending.append(line)
                     continue

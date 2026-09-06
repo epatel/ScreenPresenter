@@ -46,6 +46,8 @@ are plain `.md` files that stay readable in any editor.
 - [x] `v0.5.0` released — PDF export, signed, notarized, stapled, on GitHub
 - [x] Image slideshows — `![alt](a.png, b.png)` cross-fades between images
 - [x] `v0.6.0` released — slideshows, signed, notarized, stapled, on GitHub
+- [x] `<!-- ... -->` works as a plain comment, not just a directive carrier
+- [x] `v0.7.0` released — comments, signed, notarized, stapled, on GitHub
 - [ ] Revoke the exposed app-specific password and regenerate it in `.env`
       (deferred by choice — never reached the repo, terminal output only)
 - [ ] Confirm the release zip opens cleanly after a *browser* download
@@ -155,6 +157,15 @@ larger ones lives in the decision cards under `cards/`.
   rather than merely nice: rasterized pages would have nothing to search.
   YouTube thumbnails have no text, so those rects come from a `GeometryReader`
   probe during the render pass instead.
+
+- **2026-09-06** — `<!-- ... -->` is now a real comment. A closed comment that
+  opens a line and that neither `bg:` nor `gradient:` claims is **dropped**
+  instead of rendered as literal text — there had been no comment syntax at all.
+  Two earlier rules still hold and are what keep this safe: only a line that
+  *starts* with `<!--` is treated as a comment, so the decks' mid-sentence
+  `` `<!-- bg: path -->` `` examples still render; and an *unterminated* comment
+  is still restored to the body verbatim rather than swallowing the rest of the
+  slide.
 
 ## Current state / handoff
 
@@ -270,6 +281,10 @@ timing was accepted as-is.
 submission `ad485a7e-90d7-4d5e-9865-694697963928`; the zip re-downloaded from
 GitHub is byte-identical to the local build (`936e4573…a33280`), staples
 cleanly, and reports `source=Notarized Developer ID`.
+
+**Comments (2026-09-06).** Verified running: the comment above the Slideshow
+slide in `sample.md` does not render, and the `bg:`/`gradient:` slides still
+take their directives. Released as `v0.7.0`.
 
 Next agent: nothing is mid-flight, and nothing is blocked.
 

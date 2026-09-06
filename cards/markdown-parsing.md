@@ -115,6 +115,7 @@ narrow, inline syntax is delegated and broad.
 | `\|\|\|` alone on a line | Split the slide into two columns |
 | `<!-- bg: path -->` | Per-slide background image |
 | `<!-- gradient: k=v ... -->` | Per-slide gradient overlay |
+| `<!-- anything else -->` | Comment — dropped, never rendered |
 | ` ```lang ` fence | Syntax-highlighted code block |
 | `![alt](path)` | Image, alone on its line |
 | `![alt](youtube-url)` | YouTube embed, alone on its line |

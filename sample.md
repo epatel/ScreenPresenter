@@ -56,6 +56,9 @@ Paths are relative to the `.md` file.
 
 ---
 
+<!-- A plain comment. Anything the directives do not claim is dropped, so this
+     line never renders. -->
+
 ## Slideshow
 
 ![tap dance](images/Clumsy tap dancer in action.png, images/Predator's awkward tap dance showdown.png)
