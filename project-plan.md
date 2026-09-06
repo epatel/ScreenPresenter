@@ -264,7 +264,12 @@ not a bug. `sample.md` gained a "Slideshow" slide; README table and
 
 **Verified running (2026-09-06).** The slideshow was watched in the app: the
 images cross-fade, the frame stays put across the switch, and the 4s/1.2s
-timing was accepted as-is. Released as `v0.6.0`.
+timing was accepted as-is.
+
+`v0.6.0` was released the same way as its predecessors. Notarization `Accepted`,
+submission `ad485a7e-90d7-4d5e-9865-694697963928`; the zip re-downloaded from
+GitHub is byte-identical to the local build (`936e4573…a33280`), staples
+cleanly, and reports `source=Notarized Developer ID`.
 
 Next agent: nothing is mid-flight, and nothing is blocked.
 
