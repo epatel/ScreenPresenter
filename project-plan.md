@@ -350,7 +350,10 @@ to the last column. Verified running.
 `cursor:lastline` first shipped with a separating space before the block, on the
 terminal reasoning that a cursor occupies the *next* cell. In the panel that
 read as a gap, so `v0.10.1` removed it — the cursor now butts against the last
-character.
+character. Notarization `Accepted`, submission
+`ffe67c8f-d753-4661-b800-6b8a49f51d1b`; the zip re-downloaded from GitHub is
+byte-identical to the local build (`1e4b2754…dc9e45`), staples cleanly, and
+reports `source=Notarized Developer ID`.
 
 `v0.10.0` was released the same way as its predecessors. Notarization
 `Accepted`, submission `c44e85d4-2a95-49ba-8394-f50ac9eb8690`; the zip
