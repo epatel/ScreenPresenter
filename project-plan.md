@@ -43,6 +43,7 @@ are plain `.md` files that stay readable in any editor.
 - [x] `v0.4.0` released; gradients, margin, and the animated SVG verified running
 - [x] PDF export on ⌘P — one page per slide, save panel, Finder reveal
 - [x] Clickable links in the exported PDF — prose links and YouTube thumbnails
+- [x] `v0.5.0` released — PDF export, signed, notarized, stapled, on GitHub
 - [ ] Revoke the exposed app-specific password and regenerate it in `.env`
       (deferred by choice — never reached the repo, terminal output only)
 - [ ] Confirm the release zip opens cleanly after a *browser* download
@@ -238,6 +239,15 @@ words, with the wrapped one getting an annotation per line. Not checked: how a
 given PDF *viewer* renders the click target, and whether prose links are
 clickable in the live panel (SwiftUI should handle it, but nobody has clicked
 one).
+
+`v0.5.0` was released the same way as its predecessors (`make app` → `sign` →
+`notarize` → `staple` → `dist-zip` → `dmg`, tag on `main`, zip attached to a
+GitHub release). Notarization `Accepted`, submission
+`1d3e4ef1-21bf-4c7f-b8bf-5239a0739566`; the zip re-downloaded from GitHub is
+byte-identical to the local build (`5bd377b1…b2de6`), staples cleanly, and
+reports `source=Notarized Developer ID`. Note that it shipped with the ⌘P
+keystroke itself still unexercised by a human — the export was verified through
+code, not through the key.
 
 Next agent: nothing is mid-flight, and nothing is blocked.
 
