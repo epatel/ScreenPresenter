@@ -299,7 +299,12 @@ unchanged. Applied once on `MarkdownSlide`'s `VStack`, which reaches every
 `Text` under it; `CodeBlockView` resets it to `0` so listings keep their own
 rhythm. It is leading *within* a wrapped block — the 18pt gap *between* blocks
 is the stack's `spacing` and stays fixed. `theme-demo.md` sets `lineSpacing: 4`
-and documents the key. Verified running at 4pt. Released as `v0.8.0`.
+and documents the key. Verified running at 4pt.
+
+`v0.8.0` was released the same way as its predecessors. Notarization `Accepted`,
+submission `d2646527-fe43-485e-9e65-45942186e683`; the zip re-downloaded from
+GitHub is byte-identical to the local build (`87825d6b…e87081`), staples
+cleanly, and reports `source=Notarized Developer ID`.
 
 Next agent: nothing is mid-flight, and nothing is blocked.
 
