@@ -67,6 +67,15 @@ Comma-separated paths cross-fade in place, in the aspect of the largest image.
 
 ---
 
+<!-- skip -->
+
+## You should never see this slide
+
+`<!-- skip -->` drops the whole slide from the deck, so the page counter never
+counts it.
+
+---
+
 ## YouTube
 
 ![GPT5.5](https://youtu.be/tNV9_I-zLO0?t=20)

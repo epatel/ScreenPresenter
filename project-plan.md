@@ -50,6 +50,8 @@ are plain `.md` files that stay readable in any editor.
 - [x] `v0.7.0` released — comments, signed, notarized, stapled, on GitHub
 - [x] `lineSpacing` theme key — extra leading, set on the `## Theme` page
 - [x] `v0.8.0` released — lineSpacing, signed, notarized, stapled, on GitHub
+- [x] `<!-- skip -->` drops a slide from the deck entirely
+- [x] `v0.9.0` released — skip directive, signed, notarized, stapled, on GitHub
 - [ ] Revoke the exposed app-specific password and regenerate it in `.env`
       (deferred by choice — never reached the repo, terminal output only)
 - [ ] Confirm the release zip opens cleanly after a *browser* download
@@ -305,6 +307,17 @@ and documents the key. Verified running at 4pt.
 submission `d2646527-fe43-485e-9e65-45942186e683`; the zip re-downloaded from
 GitHub is byte-identical to the local build (`87825d6b…e87081`), staples
 cleanly, and reports `source=Notarized Developer ID`.
+
+**`<!-- skip -->` (2026-09-06).** A third slide directive, alongside `bg:` and
+`gradient:`. `Slide.parse` sets `skipped: Bool` and `Deck.load` filters those
+slides out before building the `Deck`, so page labels and PDF pages count only
+what is shown — commenting a slide's body out would have left an empty slide
+behind, since `---` defines the slides before any content is parsed. If every
+slide is skipped the deck falls back to a single placeholder rather than being
+empty. `sample.md` carries a skipped slide; a stale bullet in
+`cards/markdown-parsing.md` (claiming unrecognized comments render as literal
+paragraphs — untrue since `v0.7.0`) was corrected at the same time. Verified
+running. Released as `v0.9.0`.
 
 Next agent: nothing is mid-flight, and nothing is blocked.
 

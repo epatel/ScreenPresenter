@@ -225,15 +225,17 @@ struct Slide {
     let columns: [String]
     let themeOverride: DeckTheme?
     var gradient: SlideGradient? = nil
+    var skipped: Bool = false
 
     static func parse(_ raw: String) -> Slide {
         var bg: String?
         var gradient: SlideGradient?
+        var skipped = false
         var kept: [String] = []
         var pending: [String] = []
 
-        // Returns false for any comment that isn't a directive, so unknown
-        // comments stay in the body exactly as before.
+        // Returns false for any comment that isn't a directive; the caller
+        // drops those, which is how `<!-- note -->` works as a plain comment.
         func consume(_ inner: String) -> Bool {
             let t = inner.trimmingCharacters(in: .whitespacesAndNewlines)
             if t.hasPrefix("bg:") {
@@ -242,6 +244,10 @@ struct Slide {
             }
             if t.hasPrefix("gradient:") {
                 gradient = SlideGradient.parse(String(t.dropFirst(9)))
+                return true
+            }
+            if t.lowercased() == "skip" {
+                skipped = true
                 return true
             }
             return false
@@ -287,7 +293,13 @@ struct Slide {
         let cols = body.components(separatedBy: "\n|||\n").map {
             $0.trimmingCharacters(in: .whitespacesAndNewlines)
         }
-        return Slide(background: bg, columns: cols, themeOverride: nil, gradient: gradient)
+        return Slide(
+            background: bg,
+            columns: cols,
+            themeOverride: nil,
+            gradient: gradient,
+            skipped: skipped
+        )
     }
 }
 
@@ -349,7 +361,17 @@ struct Deck {
             return Deck(baseDir: baseDir, slides: generateThemeDemo(), theme: theme)
         }
 
-        return Deck(baseDir: baseDir, slides: filteredSlides, theme: theme)
+        // `<!-- skip -->` slides never reach the deck, so page labels and PDF
+        // pages count only what is actually shown.
+        let shown = filteredSlides.filter { !$0.skipped }
+        if shown.isEmpty && !filteredSlides.isEmpty {
+            return Deck(
+                baseDir: baseDir,
+                slides: [Slide(background: nil, columns: ["# Every slide is skipped"], themeOverride: nil)],
+                theme: theme
+            )
+        }
+        return Deck(baseDir: baseDir, slides: shown, theme: theme)
     }
 
     private static func parseTheme(_ firstSlide: String) -> (DeckTheme, String)? {

@@ -149,6 +149,7 @@ Supported directives:
 | <code>\|\|\|</code> on its own line | Split slide into two columns |
 | `<!-- bg: path -->` | Per-slide background image (raster or `.svg`) |
 | `<!-- gradient: ... -->` | Per-slide gradient overlay (see below) |
+| `<!-- skip -->` | Drop the slide from the deck entirely |
 | `<!-- anything else -->` | Comment — not rendered |
 | ` ```lang ` fenced block | Syntax-highlighted code |
 | `![alt](path)` | Image — path relative to the `.md` file, absolute, or `~/...` |
