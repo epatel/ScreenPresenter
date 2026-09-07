@@ -60,6 +60,22 @@ are handled by warming a cache *before* the render pass:
   only — both bundled backgrounds come out solid black through it, which is
   why the web view is used instead.
 
+## Gradients export as a bitmap
+
+CoreGraphics builds a PDF axial shading from a gradient's RGB stops and
+**drops their alpha**, so an exported gradient paints fully opaque — the
+theme's background colour and any `bg:` photo disappear behind a solid slab
+of the gradient's colour. A single-colour, single-alpha gradient collapses to
+a flat fill and is unaffected, which is why the bug hid: neutralised
+gradients (`start=#000@0 end=#000@0`) looked fine while every real one wiped
+the slide.
+
+`SlideGradient.image(size:)` draws the same ramp into a bitmap with
+`CGGradient`, and `backgroundOverlay` uses it in place of the vector
+`LinearGradient` when `staticBackgrounds` is set. Images with alpha go into
+the PDF as an `SMask`, which CoreGraphics does honour. The live panel keeps
+the vector gradient.
+
 ## Two non-obvious mechanics
 
 - **The web view needs a window.** WebKit does not composite a view with no

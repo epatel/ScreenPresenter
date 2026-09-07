@@ -61,6 +61,7 @@ are plain `.md` files that stay readable in any editor.
 - [x] SVG backgrounds fade in instead of popping once the web view loads
 - [x] `v0.12.0` released — innerMargin and the SVG fade, signed, notarized,
       stapled, on GitHub
+- [x] Gradients export correctly to PDF — an alpha ramp was painting opaque
 - [ ] Revoke the exposed app-specific password and regenerate it in `.env`
       (deferred by choice — never reached the repo, terminal output only)
 - [ ] Confirm the release zip opens cleanly after a *browser* download
@@ -204,6 +205,17 @@ larger ones lives in the decision cards under `cards/`.
   0.4s on `didFinish` — dispatched to the next runloop pass, because
   `didFinish` precedes the first paint. Image backgrounds are left alone:
   `NSImage` decodes synchronously and is already there on frame one.
+
+- **2026-09-07** — Gradients are drawn as a **bitmap** in the PDF export, not
+  as a `LinearGradient`. CoreGraphics writes a PDF axial shading from the RGB
+  stops only and drops their alpha, so every exported gradient painted fully
+  opaque — hiding the theme background colour and every `bg:` photo behind a
+  solid slab. A gradient whose two stops are identical collapses to a flat
+  fill and was unaffected, which is exactly why this went unnoticed: the
+  neutralised-gradient slides exported fine. `SlideGradient.image(size:)`
+  redraws the ramp with `CGGradient` into a bitmap (alpha survives as an
+  `SMask`) and `backgroundOverlay` uses it only when `staticBackgrounds` is
+  set. The live panel is untouched.
 
 ## Current state / handoff
 
@@ -418,6 +430,14 @@ snapping in. README, `cards/theme-system.md`, `cards/architecture.md`, and
 re-downloaded from GitHub is byte-identical to the local build
 (`ffb62bf3…fdf611`), staples cleanly, and reports
 `source=Notarized Developer ID`.
+
+**PDF gradient fix (2026-09-07).** A user-exported deck (`CH137.md`) came
+out with black backgrounds on every slide — no theme colour, no `bg:` photos. Cause and fix are in the decision
+above and in `cards/pdf-export.md`. Verified by re-exporting that deck through
+a temporary env-var hook in `AppDelegateShim` (removed again) and rasterizing
+the pages: the theme colour, the background photos, and the gradient ramps all
+render, and the neutralised-gradient slides are unchanged. The ⌘P path itself
+was not re-exercised by hand.
 
 Next agent: nothing is mid-flight, and nothing is blocked.
 

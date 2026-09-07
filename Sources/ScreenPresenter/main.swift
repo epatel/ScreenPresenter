@@ -59,6 +59,39 @@ struct SlideGradient {
         )
     }
 
+    // CoreGraphics writes an axial shading into a PDF from its RGB stops only
+    // and drops their alpha, so an exported gradient paints fully opaque and
+    // hides the slide background. The export draws this bitmap instead; the
+    // live panel keeps the vector gradient.
+    func image(size: CGSize) -> NSImage {
+        let w = max(1, Int(size.width.rounded()))
+        let h = max(1, Int(size.height.rounded()))
+        let blank = NSImage(size: size)
+        guard let space = CGColorSpace(name: CGColorSpace.sRGB),
+              let ctx = CGContext(
+                  data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
+                  space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
+              let start = NSColor(startColor).usingColorSpace(.sRGB),
+              let end = NSColor(endColor).usingColorSpace(.sRGB),
+              let gradient = CGGradient(
+                  colorsSpace: space,
+                  colors: [start.cgColor, end.cgColor] as CFArray,
+                  locations: [min(from, to), max(from, to)])
+        else { return blank }
+
+        let radians = angle * .pi / 180
+        let dx = sin(radians) / 2
+        let dy = cos(radians) / 2
+        // The unit points measure y downward; a bitmap context measures it up.
+        let p0 = CGPoint(x: (0.5 - dx) * size.width, y: (0.5 + dy) * size.height)
+        let p1 = CGPoint(x: (0.5 + dx) * size.width, y: (0.5 - dy) * size.height)
+        ctx.drawLinearGradient(
+            gradient, start: p0, end: p1,
+            options: [.drawsBeforeStartLocation, .drawsAfterEndLocation])
+        guard let cg = ctx.makeImage() else { return blank }
+        return NSImage(cgImage: cg, size: size)
+    }
+
     // "angle=180 from=0.35 to=1 start=#000000@0 end=#000000@0.85"
     static func parse(_ spec: String) -> SlideGradient? {
         var config: [String: String] = [:]
@@ -1516,7 +1549,13 @@ struct SlideCanvas: View {
     @ViewBuilder
     private func backgroundOverlay(theme: DeckTheme, shade: Double, hasContent: Bool) -> some View {
         if let gradient = slide.gradient ?? theme.defaultGradient {
-            gradient.linearGradient
+            if staticBackgrounds {
+                GeometryReader { geo in
+                    Image(nsImage: gradient.image(size: geo.size)).resizable()
+                }
+            } else {
+                gradient.linearGradient
+            }
         } else if hasContent {
             Color.black.opacity(shade)
         } else {
