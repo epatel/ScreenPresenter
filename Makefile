@@ -156,7 +156,10 @@ notarize: zip
 		--password "$(APP_PASSWORD)" \
 		--wait
 
-staple:
+# Depends on notarize: without it `make dmg` staples whatever bundle happens to
+# be sitting in build/ and succeeds on a ticket from an earlier release, so a
+# stale app ships under the new version number.
+staple: notarize
 	xcrun stapler staple $(APP_BUNDLE)
 	xcrun stapler validate $(APP_BUNDLE)
 
