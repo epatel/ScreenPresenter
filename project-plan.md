@@ -413,6 +413,12 @@ content, and `SVGBackgroundView` fades up over 0.4s on `didFinish` instead of
 snapping in. README, `cards/theme-system.md`, `cards/architecture.md`, and
 `theme-demo.md` (now `innerMargin: 64`) updated.
 
+`v0.12.0` was released the same way as its predecessors. Notarization
+`Accepted`, submission `516a0752-c182-421d-a073-07f40c6ff779`; the zip
+re-downloaded from GitHub is byte-identical to the local build
+(`ffb62bf3…fdf611`), staples cleanly, and reports
+`source=Notarized Developer ID`.
+
 Next agent: nothing is mid-flight, and nothing is blocked.
 
 ## Open questions
