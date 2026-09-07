@@ -62,6 +62,8 @@ are plain `.md` files that stay readable in any editor.
 - [x] `v0.12.0` released — innerMargin and the SVG fade, signed, notarized,
       stapled, on GitHub
 - [x] Gradients export correctly to PDF — an alpha ramp was painting opaque
+- [x] `v0.12.1` released — the gradient fix, signed, notarized, stapled, on
+      GitHub
 - [ ] Revoke the exposed app-specific password and regenerate it in `.env`
       (deferred by choice — never reached the repo, terminal output only)
 - [ ] Confirm the release zip opens cleanly after a *browser* download
@@ -216,6 +218,15 @@ larger ones lives in the decision cards under `cards/`.
   redraws the ramp with `CGGradient` into a bitmap (alpha survives as an
   `SMask`) and `backgroundOverlay` uses it only when `staticBackgrounds` is
   set. The live panel is untouched.
+
+- **2026-09-07** — `staple` now declares `notarize` as its prerequisite. It had
+  none, so `make dist-zip` and `make dmg` stapled whatever bundle was sitting
+  in `build/` — and *succeeded*, because an earlier release's ticket still
+  matched that unmodified app. The first 0.12.1 zip and dmg were therefore a
+  0.12.0 app under a 0.12.1 name, with no rebuild, no signing and no
+  notarization run, and nothing in the output said so. Caught by checking
+  `CFBundleShortVersionString` in the built bundle against `VERSION`, which is
+  now the thing to check when a release "succeeds" suspiciously fast.
 
 ## Current state / handoff
 
@@ -438,6 +449,13 @@ a temporary env-var hook in `AppDelegateShim` (removed again) and rasterizing
 the pages: the theme colour, the background photos, and the gradient ramps all
 render, and the neutralised-gradient slides are unchanged. The ⌘P path itself
 was not re-exercised by hand.
+
+`v0.12.1` was released the same way as its predecessors. Notarization
+`Accepted`, submission `ac1141ba-b569-43f9-8705-b98787b662a7`; the zip
+re-downloaded from GitHub is byte-identical to the local build
+(`36a6e614…503500`), staples cleanly, reports
+`source=Notarized Developer ID`, and its `Info.plist` reads `0.12.1` — the
+last check being new, and the reason the stale-bundle bug above was found.
 
 Next agent: nothing is mid-flight, and nothing is blocked.
 
