@@ -21,11 +21,12 @@ struct DeckTheme {
     let templateName: String
     var defaultGradient: SlideGradient? = nil
     var lineSpacing: CGFloat = 0
+    var innerMargin: CGFloat = 48
 }
 ```
 
-`defaultGradient` and `lineSpacing` are the `var`s, and both carry defaults so
-the ten bundled entries need no argument for them. Declare any future optional
+`defaultGradient`, `lineSpacing` and `innerMargin` are the `var`s, and each
+carries a default so the ten bundled entries need no argument for them. Declare any future optional
 addition the same way rather than editing all ten. `lineSpacing` defaults to
 `0` because that is SwiftUI's own default — an existing deck lays out
 unchanged.
@@ -61,9 +62,10 @@ sentinel that swaps the deck for one preview slide per bundled template.
 2. Lines are parsed as `key: value`. `template` selects the base theme
    (unknown names fall back to `DeckTheme.default()`); `textColor`,
    `accentColor`, `backgroundColor`, `codeBackground` accept `#rrggbb`;
-   `font` and `defaultBackground` are plain strings; `lineSpacing` is a
-   number of points; `defaultGradient` takes the same `key=value` spec as the
-   per-slide directive. Anything omitted inherits from the base template.
+   `font` and `defaultBackground` are plain strings; `lineSpacing` and
+   `innerMargin` are numbers of points (`innerMargin` clamped to 0–200);
+   `defaultGradient` takes the same `key=value` spec as the per-slide
+   directive. Anything omitted inherits from the base template.
 3. A `template=NAME` CLI argument overrides the inline choice entirely — it
    replaces the theme struct, so inline hex overrides are discarded too.
 4. If the effective template is `demo`, the deck is replaced wholesale.
@@ -131,6 +133,20 @@ a system font, not a bundled one.
   resets it to `0`, since a syntax-highlighted listing has its own rhythm. It
   adds to the leading *within* a wrapped block; the 18pt gap *between* blocks is
   the stack's own `spacing` and is not configurable.
+
+- **`innerMargin` is the deck-side counterpart of the config panel's Margin
+  slider**, and the two are deliberately separate: the outer margin describes
+  the display and persists in `UserDefaults`, while `innerMargin` describes the
+  deck and travels with the file. It is applied on `SlideCanvas`'s
+  `columnsView` and so also reaches the PDF export; the page-number label keeps
+  its own fixed 16pt inset.
+
+- **An SVG background fades in, an image background does not.** `NSImage`
+  decodes synchronously, so a photo is there on the first frame; the web view
+  behind an SVG paints only after its load finishes, so `SVGBackgroundView`
+  holds it transparent and fades it up on `didFinish`. Slides therefore change
+  their SVG backgrounds with a 0.4s cross-over against the theme color, not a
+  snap.
 
 - **Light themes need a dark `codeBackground`.** The syntax theme is a fixed
   `atom-one-dark`, so a light code background makes highlighted text

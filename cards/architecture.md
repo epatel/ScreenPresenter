@@ -53,7 +53,10 @@ flowchart TD
 8. `CodeBlockView` — Highlightr with the fixed `atom-one-dark` syntax theme.
 9. `YouTubeLink` / `YouTubeBlock` / `YouTubeWebView` / `PassiveWebView` —
    thumbnail, play promotion, and the `WKWebView` that hosts the IFrame API.
-10. `SVGBackgroundView` — a `WKWebView` used to rasterize SVG backgrounds.
+10. `SVGBackgroundView` — a `WKWebView` used to rasterize SVG backgrounds. It
+    starts at `alphaValue = 0` and its coordinator (the navigation delegate)
+    fades it in over 0.4s on `didFinish`, since a web view paints nothing
+    until the load completes and the background would otherwise pop in.
 11. `EmbedServer` — a singleton `NWListener` bound to `127.0.0.1:<random>`
     that serves the YouTube embed page over real http.
 12. `PresenterState` — the deck plus the current slide index.

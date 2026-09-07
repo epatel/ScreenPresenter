@@ -2,6 +2,7 @@
 
 template: ocean
 lineSpacing: 4
+innerMargin: 64
 
 ---
 
@@ -26,10 +27,12 @@ font: Playfair Display
 textColor: #ffffff
 accentColor: #00bfff
 lineSpacing: 4
+innerMargin: 64
 ```
 
 `lineSpacing` is extra leading between lines of text, in points. This deck
-uses `4`.
+uses `4`. `innerMargin` is the inset from the panel edge to the content, also
+in points — `48` by default, `64` here.
 
 Available templates:
 

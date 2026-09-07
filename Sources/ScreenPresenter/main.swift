@@ -111,6 +111,10 @@ struct DeckTheme {
     var defaultGradient: SlideGradient? = nil
     // 0 is SwiftUI's own default, so an existing deck lays out unchanged.
     var lineSpacing: CGFloat = 0
+    // Inset between the panel edge and the slide content. The outer margin's
+    // counterpart, but a property of the deck rather than the display, so it
+    // lives here instead of in PresenterSettings.
+    var innerMargin: CGFloat = 48
 
     private static func rgb(_ r: Double, _ g: Double, _ b: Double, _ a: Double = 1.0) -> Color {
         Color(nsColor: NSColor(calibratedRed: r, green: g, blue: b, alpha: a))
@@ -444,7 +448,9 @@ struct Deck {
             defaultGradient: config["defaultGradient"].flatMap(SlideGradient.parse)
                 ?? base.defaultGradient,
             lineSpacing: config["lineSpacing"].flatMap { Double($0) }.map { CGFloat($0) }
-                ?? base.lineSpacing
+                ?? base.lineSpacing,
+            innerMargin: config["innerMargin"].flatMap { Double($0) }
+                .map { CGFloat(min(max($0, 0), 200)) } ?? base.innerMargin
         )
 
         let contentStr = contentLines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1113,13 +1119,40 @@ final class PassiveWebView: WKWebView {
 struct SVGBackgroundView: NSViewRepresentable {
     let url: URL
 
-    final class Coordinator { var loadedURL: URL? }
+    // A web view paints nothing until the load finishes, so an SVG background
+    // used to pop in. It starts transparent and the coordinator fades it up
+    // once WebKit says the page is done.
+    static let fadeDuration: TimeInterval = 0.4
+
+    final class Coordinator: NSObject, WKNavigationDelegate {
+        var loadedURL: URL?
+
+        func webView(_ wv: WKWebView, didFinish nav: WKNavigation!) { fadeIn(wv) }
+        func webView(_ wv: WKWebView, didFail nav: WKNavigation!, withError e: Error) { fadeIn(wv) }
+        func webView(_ wv: WKWebView, didFailProvisionalNavigation nav: WKNavigation!, withError e: Error) {
+            fadeIn(wv)
+        }
+
+        // didFinish arrives a frame or two before the first paint; starting the
+        // fade on the next runloop pass keeps the blank view out of it.
+        private func fadeIn(_ wv: WKWebView) {
+            DispatchQueue.main.async {
+                NSAnimationContext.runAnimationGroup { ctx in
+                    ctx.duration = SVGBackgroundView.fadeDuration
+                    ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                    wv.animator().alphaValue = 1
+                }
+            }
+        }
+    }
+
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> PassiveWebView {
         let wv = PassiveWebView(frame: .zero, configuration: WKWebViewConfiguration())
         wv.underPageBackgroundColor = .clear
         wv.setValue(false, forKey: "drawsBackground")
+        wv.navigationDelegate = context.coordinator
         load(into: wv, context: context)
         return wv
     }
@@ -1138,6 +1171,9 @@ struct SVGBackgroundView: NSViewRepresentable {
         svg{width:100vw;height:100vh;display:block}
         </style></head><body>\(svg)</body></html>
         """
+        // Cancel a fade still in flight from the previous deck's background.
+        wv.layer?.removeAllAnimations()
+        wv.alphaValue = 0
         wv.loadHTMLString(html, baseURL: url.deletingLastPathComponent())
         context.coordinator.loadedURL = url
     }
@@ -1428,7 +1464,7 @@ struct SlideCanvas: View {
 
             columnsView
                 .foregroundStyle(theme.textColor)
-                .padding(48)
+                .padding(theme.innerMargin)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
             Text(pageLabel)

@@ -57,6 +57,10 @@ are plain `.md` files that stay readable in any editor.
 - [x] `v0.10.1` released — `cursor:lastline` sits flush against the last word
 - [x] ⌘F toggles fullscreen — whole screen frame, no border, no corner radius
 - [x] `v0.11.0` released — fullscreen, signed, notarized, stapled, on GitHub
+- [x] `innerMargin` theme key — inset from the panel edge to the slide content
+- [x] SVG backgrounds fade in instead of popping once the web view loads
+- [x] `v0.12.0` released — innerMargin and the SVG fade, signed, notarized,
+      stapled, on GitHub
 - [ ] Revoke the exposed app-specific password and regenerate it in `.env`
       (deferred by choice — never reached the repo, terminal output only)
 - [ ] Confirm the release zip opens cleanly after a *browser* download
@@ -185,6 +189,21 @@ larger ones lives in the decision cards under `cards/`.
   radius and drops the border. The outer margin is left untouched and restored
   on exit; `applyMargin` returns early while fullscreen. Esc leaves fullscreen
   before it dismisses, matching the macOS convention — a second Esc dismisses.
+
+- **2026-09-07** — `innerMargin` is a **theme** key, not a config-panel
+  control. The two margins are deliberately split: `outerMargin` describes the
+  display, persists in `UserDefaults`, and is session-wide; `innerMargin`
+  describes the deck and travels with the `.md` file. It replaces the
+  hard-coded `.padding(48)` on `SlideCanvas`'s content, so it reaches the PDF
+  export too, and is clamped to 0–200. The page-number label keeps its own
+  fixed 16pt inset — it is chrome, not content.
+- **2026-09-07** — `SVGBackgroundView` fades in rather than appearing at once.
+  A `WKWebView` paints nothing until its load finishes, so an SVG background
+  popped in a beat after the slide; the view now starts transparent and its
+  coordinator, acting as the navigation delegate, animates alpha to 1 over
+  0.4s on `didFinish` — dispatched to the next runloop pass, because
+  `didFinish` precedes the first paint. Image backgrounds are left alone:
+  `NSImage` decodes synchronously and is already there on frame one.
 
 ## Current state / handoff
 
@@ -386,6 +405,13 @@ restores the windowed size.
 re-downloaded from GitHub is byte-identical to the local build
 (`b38f819f…58316c`), staples cleanly, and reports
 `source=Notarized Developer ID`.
+
+**`innerMargin` and the SVG fade (2026-09-07).** Two small changes, both
+verified running: the `## Theme` key `innerMargin` (default `48`, the old
+hard-coded padding) now drives the inset from the panel edge to the slide
+content, and `SVGBackgroundView` fades up over 0.4s on `didFinish` instead of
+snapping in. README, `cards/theme-system.md`, `cards/architecture.md`, and
+`theme-demo.md` (now `innerMargin: 64`) updated.
 
 Next agent: nothing is mid-flight, and nothing is blocked.
 
