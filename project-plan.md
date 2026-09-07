@@ -381,6 +381,12 @@ re-downloaded from GitHub is byte-identical to the local build
 Verified running: ⌘F covers the menu bar edge to edge and the exit path
 restores the windowed size.
 
+`v0.11.0` was released the same way as its predecessors. Notarization
+`Accepted`, submission `2173cf92-40a9-4cd0-b453-32456b892a5a`; the zip
+re-downloaded from GitHub is byte-identical to the local build
+(`b38f819f…58316c`), staples cleanly, and reports
+`source=Notarized Developer ID`.
+
 Next agent: nothing is mid-flight, and nothing is blocked.
 
 ## Open questions
