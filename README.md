@@ -84,8 +84,10 @@ declare one.
 | Space, →, Return | Next slide |
 | ← | Previous slide |
 | Esc, click outside | Dismiss |
+| Esc (while fullscreen) | Leave fullscreen, stay on the slide |
 | Esc (while a video is playing) | Close the video, stay on the slide |
 | Space / ← / → (while a video is playing) | Close the video and navigate |
+| ⌘F | Toggle fullscreen |
 | ⌘P | Export the deck as a PDF |
 | Shift while hovering corner | Open with config panel |
 | ⌘Q (while config panel is focused) | Quit |

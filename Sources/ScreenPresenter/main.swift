@@ -546,6 +546,9 @@ final class PresenterSettings: ObservableObject {
         didSet { UserDefaults.standard.set(Double(outerMargin), forKey: "outerMargin") }
     }
 
+    // Cmd-F. Session-only: a deck should open windowed however it was left.
+    @Published var fullscreen: Bool = false
+
     static let marginRange: ClosedRange<CGFloat> = 0...400
     static let defaultMargin: CGFloat = 40
 
@@ -1529,14 +1532,17 @@ struct PresenterContent: View {
     @EnvironmentObject var videoPlayback: VideoPlayback
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
+        let radius: CGFloat = settings.fullscreen ? 0 : 20
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         ZStack {
             SlideCanvas(
                 slide: state.currentSlide,
                 deckTheme: state.deck.theme,
                 baseDir: state.baseDir,
                 shade: settings.shade(for: state.index),
-                pageLabel: "\(state.index + 1) / \(state.deck.slides.count)"
+                pageLabel: "\(state.index + 1) / \(state.deck.slides.count)",
+                cornerRadius: radius,
+                showsBorder: !settings.fullscreen
             )
 
             if let p = videoPlayback.active {
@@ -1964,8 +1970,29 @@ final class Controller: NSObject, NSWindowDelegate {
             .sink { [weak self] newMargin in self?.applyMargin(newMargin) }
     }
 
+    // Cmd-F. Fullscreen means the whole screen frame, menu bar included, so the
+    // panel has to climb above .mainMenu for the duration; the backdrop follows
+    // one level below so it stays behind. The margin describes the windowed
+    // size and is left untouched — exiting restores it.
+    private func toggleFullscreen() {
+        guard isShown, let screen = NSScreen.main else { return }
+        settings.fullscreen.toggle()
+        if settings.fullscreen {
+            configPanel?.orderOut(nil)
+            configPanel = nil
+            backdrop.level = NSWindow.Level(rawValue: NSWindow.Level.screenSaver.rawValue - 1)
+            panel.level = .screenSaver
+            panel.setFrame(screen.frame, display: true)
+        } else {
+            backdrop.level = .floating
+            panel.level = .floating
+            recenterPanel()
+        }
+        panel.orderFront(nil)
+    }
+
     private func applyMargin(_ margin: CGFloat) {
-        guard isShown else { return }
+        guard isShown, !settings.fullscreen else { return }
         let size = panelSize(margin: margin)
         if configPanel != nil {
             layoutWithConfig(panelSize: size)
@@ -2124,6 +2151,11 @@ final class Controller: NSObject, NSWindowDelegate {
                 Task { @MainActor in await self.exportPDF() }
                 return nil
             }
+            if event.modifierFlags.contains(.command),
+               event.charactersIgnoringModifiers?.lowercased() == "f" {
+                self.toggleFullscreen()
+                return nil
+            }
             guard self.videoPlayback.active != nil else { return event }
             switch event.keyCode {
             case 53:  // escape — close the video, keep the slide
@@ -2172,6 +2204,11 @@ final class Controller: NSObject, NSWindowDelegate {
         guard isShown else { return }
         isShown = false
         videoPlayback.active = nil
+        if settings.fullscreen {
+            settings.fullscreen = false
+            panel.level = .floating
+            backdrop.level = .floating
+        }
         removeKeyMonitor()
         panel.orderOut(nil)
         backdrop.orderOut(nil)
@@ -2299,6 +2336,8 @@ final class Controller: NSObject, NSWindowDelegate {
         case 53:                                     // escape
             if videoPlayback.active != nil {
                 videoPlayback.active = nil
+            } else if settings.fullscreen {
+                toggleFullscreen()
             } else {
                 hide()
             }

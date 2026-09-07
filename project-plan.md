@@ -55,6 +55,8 @@ are plain `.md` files that stay readable in any editor.
 - [x] `<!-- cursor -->` — blinking cursor, below the content or on the last line
 - [x] `v0.10.0` released — cursor, signed, notarized, stapled, on GitHub
 - [x] `v0.10.1` released — `cursor:lastline` sits flush against the last word
+- [x] ⌘F toggles fullscreen — whole screen frame, no border, no corner radius
+- [x] `v0.11.0` released — fullscreen, signed, notarized, stapled, on GitHub
 - [ ] Revoke the exposed app-specific password and regenerate it in `.env`
       (deferred by choice — never reached the repo, terminal output only)
 - [ ] Confirm the release zip opens cleanly after a *browser* download
@@ -173,6 +175,16 @@ larger ones lives in the decision cards under `cards/`.
   `` `<!-- bg: path -->` `` examples still render; and an *unterminated* comment
   is still restored to the body verbatim rather than swallowing the rest of the
   slide.
+
+- **2026-09-07** — ⌘F fullscreen means the **whole `screen.frame`**, menu bar
+  included, not "margin 0" — the margin slider already covers filling
+  `visibleFrame`. Covering the menu bar requires the panel above `.mainMenu`,
+  so it goes to `.screenSaver` with the backdrop one level below; both drop
+  back to `.floating` on exit and in `hide()`. `settings.fullscreen` is
+  session-only (a deck should open windowed) and is what zeroes the corner
+  radius and drops the border. The outer margin is left untouched and restored
+  on exit; `applyMargin` returns early while fullscreen. Esc leaves fullscreen
+  before it dismisses, matching the macOS convention — a second Esc dismisses.
 
 ## Current state / handoff
 
@@ -360,6 +372,14 @@ reports `source=Notarized Developer ID`.
 re-downloaded from GitHub is byte-identical to the local build
 (`c8c7c207…8eb058`), staples cleanly, and reports
 `source=Notarized Developer ID`.
+
+**Fullscreen (2026-09-07).** ⌘F added to `installKeyMonitor` alongside ⌘P, plus
+`Controller.toggleFullscreen`, `PresenterSettings.fullscreen`, an early return in
+`applyMargin`, a reset in `hide()`, and an Esc branch in `handleKey`.
+`PresenterContent` passes `cornerRadius: 0` / `showsBorder: false` down to
+`SlideCanvas` while fullscreen. README and `cards/panel-windows.md` updated.
+Verified running: ⌘F covers the menu bar edge to edge and the exit path
+restores the windowed size.
 
 Next agent: nothing is mid-flight, and nothing is blocked.
 

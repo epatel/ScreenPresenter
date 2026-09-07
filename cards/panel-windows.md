@@ -81,19 +81,34 @@ before.
 
 `PresenterPanel` overrides `keyDown` and forwards the key code to an `onKey`
 closure, which `Controller` sets to `handleKey`. A separate local event
-monitor (`videoKeyMonitor`) is installed while a video is playing so Esc
-closes the video instead of the panel, and Space/arrows close the video while
-navigating.
+monitor (`installKeyMonitor`) runs ahead of the responder chain: it is the
+only place ⌘-modified keys (⌘P, ⌘F) arrive, since this app has no menu bar,
+and while a video plays it also lets Esc close the video instead of the panel
+and Space/arrows close the video while navigating.
 
 | Key | Action |
 |---|---|
 | Space, →, Return | Next slide |
 | ← | Previous slide |
 | Esc, click outside | Dismiss |
+| Esc while fullscreen | Leave fullscreen |
 | Esc while a video plays | Close the video, stay on the slide |
 | Space / ← / → while a video plays | Close the video and navigate |
+| ⌘F | Toggle fullscreen |
+| ⌘P | Export the deck as a PDF |
 | Shift while entering the corner | Show with the config panel |
 | ⌘Q while the config panel is focused | Quit |
+
+## Fullscreen (⌘F)
+
+`toggleFullscreen` sets the panel to the whole `screen.frame` — menu bar
+included — which only works if it climbs above `.mainMenu`: the panel goes to
+`.screenSaver` and the backdrop one level below it, both restored to
+`.floating` on exit and in `hide()`. `settings.fullscreen` drives the view
+side, zeroing the corner radius and dropping the border, and it makes the
+Margin slider inert (`applyMargin` returns early) — the margin describes the
+windowed size and is restored on exit. Entering fullscreen closes the config
+panel, since nothing would be visible beside the deck.
 
 ## The activation-policy flip
 
